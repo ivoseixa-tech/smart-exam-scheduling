@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1790955662284,
+      "tag": "0000_create_core_occupational_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790955693882,
+      "tag": "0001_create_appointments",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790955708797,
+      "tag": "0002_create_appointment_details",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790955739323,
+      "tag": "0003_create_access_and_audit_functions",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790955805942,
+      "tag": "0004_create_profile_access_functions",
+      "breakpoints": true
+    }
+  ]
+}
