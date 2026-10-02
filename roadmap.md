@@ -7,3 +7,6 @@
 - [x] Permitir cadastro imediato sem confirmação por e-mail
 - [x] Permitir ao mestre listar usuários e redefinir senhas com validação no servidor
 - [x] Exigir aprovação do mestre para liberar novos usuários
+- [x] Corrigir consulta e preenchimento dos dados de empresa por CNPJ
+- [x] Separar nome e CPF e tornar RG e admissão opcionais
+- [x] Exigir função no novo agendamento

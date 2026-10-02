@@ -100,6 +100,7 @@ export type Database = {
           employee_id: string
           ends_at: string
           id: string
+          job_title: string | null
           location: string
           notes: string | null
           starts_at: string
@@ -115,6 +116,7 @@ export type Database = {
           employee_id: string
           ends_at: string
           id?: string
+          job_title?: string | null
           location: string
           notes?: string | null
           starts_at: string
@@ -130,6 +132,7 @@ export type Database = {
           employee_id?: string
           ends_at?: string
           id?: string
+          job_title?: string | null
           location?: string
           notes?: string | null
           starts_at?: string
@@ -281,7 +284,7 @@ export type Database = {
       }
       employees: {
         Row: {
-          admission_date: string
+          admission_date: string | null
           birth_date: string
           birthplace: string
           company_id: string
@@ -293,13 +296,13 @@ export type Database = {
           is_active: boolean
           job_title: string
           nationality: string
-          rg: string
+          rg: string | null
           sex: string
           updated_at: string
           workplace: string
         }
         Insert: {
-          admission_date: string
+          admission_date?: string | null
           birth_date: string
           birthplace: string
           company_id: string
@@ -311,13 +314,13 @@ export type Database = {
           is_active?: boolean
           job_title: string
           nationality: string
-          rg: string
+          rg?: string | null
           sex: string
           updated_at?: string
           workplace: string
         }
         Update: {
-          admission_date?: string
+          admission_date?: string | null
           birth_date?: string
           birthplace?: string
           company_id?: string
@@ -329,7 +332,7 @@ export type Database = {
           is_active?: boolean
           job_title?: string
           nationality?: string
-          rg?: string
+          rg?: string | null
           sex?: string
           updated_at?: string
           workplace?: string
