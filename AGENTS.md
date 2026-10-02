@@ -12,3 +12,4 @@
 - Keep domain data multi-tenant with company-scoped RLS; roles remain in `user_roles` because client-visible roles are unsafe.
 - Keep the application bilingual through the shared i18n provider because PT/EN must cover every workflow.
 - Put authenticated application pages under the managed `_authenticated` layout because browser sessions are client-side.
+- Keep privileged user administration in authenticated server functions with a server-side master-role check before admin access.
