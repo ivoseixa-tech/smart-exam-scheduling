@@ -1,24 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import type { Database } from "@/integrations/supabase/types";
-
-async function requireMaster(context: {
-  supabase: SupabaseClient<Database>;
-  userId: string;
-}) {
-  const { data, error } = await context.supabase.rpc("has_role", {
-    _user_id: context.userId,
-    _role: "master",
-  });
-  if (error || !data) throw new Error("Acesso permitido somente ao usuário mestre.");
-}
 
 export const listManagedUsers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await requireMaster(context);
+    const { data: isMaster, error: roleError } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "master" });
+    if (roleError || !isMaster) throw new Error("Acesso permitido somente ao usuário mestre.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [{ data: authData, error: authError }, { data: profiles, error: profilesError }, { data: roles, error: rolesError }, { data: companies, error: companiesError }] = await Promise.all([
       supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
@@ -50,7 +38,8 @@ export const resetManagedUserPassword = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => z.object({ userId: z.string().uuid(), password: z.string().min(8).max(72) }).parse(input))
   .handler(async ({ data, context }) => {
-    await requireMaster(context);
+    const { data: isMaster, error: roleError } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "master" });
+    if (roleError || !isMaster) throw new Error("Acesso permitido somente ao usuário mestre.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.auth.admin.updateUserById(data.userId, { password: data.password });
     if (error) throw new Error("Não foi possível alterar a senha deste usuário.");
