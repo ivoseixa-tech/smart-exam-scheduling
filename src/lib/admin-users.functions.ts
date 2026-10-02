@@ -1,9 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Database } from "@/integrations/supabase/types";
 
 async function requireMaster(context: {
-  supabase: Parameters<Parameters<typeof requireSupabaseAuth>[0]>[0] extends never ? never : any;
+  supabase: SupabaseClient<Database>;
   userId: string;
 }) {
   const { data, error } = await context.supabase.rpc("has_role", {
