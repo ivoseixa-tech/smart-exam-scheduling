@@ -8,6 +8,13 @@
       "when": 1790955662284,
       "tag": "0000_create_core_occupational_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790955693882,
+      "tag": "0001_create_appointments",
+      "breakpoints": true
     }
   ]
 }

@@ -14,6 +14,69 @@ export type Database = {
   }
   public: {
     Tables: {
+      appointments: {
+        Row: {
+          assessment_type: string
+          company_id: string
+          created_at: string
+          created_by: string
+          employee_id: string
+          ends_at: string
+          id: string
+          location: string
+          notes: string | null
+          starts_at: string
+          status: Database["public"]["Enums"]["appointment_status"]
+          updated_at: string
+          updated_by: string
+        }
+        Insert: {
+          assessment_type: string
+          company_id: string
+          created_at?: string
+          created_by: string
+          employee_id: string
+          ends_at: string
+          id?: string
+          location: string
+          notes?: string | null
+          starts_at: string
+          status?: Database["public"]["Enums"]["appointment_status"]
+          updated_at?: string
+          updated_by: string
+        }
+        Update: {
+          assessment_type?: string
+          company_id?: string
+          created_at?: string
+          created_by?: string
+          employee_id?: string
+          ends_at?: string
+          id?: string
+          location?: string
+          notes?: string | null
+          starts_at?: string
+          status?: Database["public"]["Enums"]["appointment_status"]
+          updated_at?: string
+          updated_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointments_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           city: string | null
