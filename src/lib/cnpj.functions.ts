@@ -14,10 +14,10 @@ export const lookupCnpj = createServerFn({ method: "POST" })
     if (!response.ok) return { ok: false as const, message: "CNPJ não encontrado ou serviço indisponível." };
     const result = await response.json() as Record<string, unknown>;
     return { ok: true as const, company: {
-      cnpj: data.cnpj, legal_name: String(result.razao_social ?? ""), trade_name: String(result.nome_fantasia ?? ""),
-      registration_status: String(result.descricao_situacao_cadastral ?? ""), cnae_code: String(result.cnae_fiscal ?? ""),
-      cnae_description: String(result.cnae_fiscal_descricao ?? ""), email: String(result.email ?? ""), phone: String(result.ddd_telefone_1 ?? ""),
-      street: String(result.logradouro ?? ""), number: String(result.numero ?? ""), complement: String(result.complemento ?? ""),
-      district: String(result.bairro ?? ""), city: String(result.municipio ?? ""), state: String(result.uf ?? ""), postal_code: String(result.cep ?? ""),
+      cnpj: data.cnpj, legal_name: String(result["razao_social"] ?? ""), trade_name: String(result["nome_fantasia"] ?? ""),
+      registration_status: String(result["descricao_situacao_cadastral"] ?? ""), cnae_code: String(result["cnae_fiscal"] ?? ""),
+      cnae_description: String(result["cnae_fiscal_descricao"] ?? ""), email: String(result["email"] ?? ""), phone: String(result["ddd_telefone_1"] ?? ""),
+      street: String(result["logradouro"] ?? ""), number: String(result["numero"] ?? ""), complement: String(result["complemento"] ?? ""),
+      district: String(result["bairro"] ?? ""), city: String(result["municipio"] ?? ""), state: String(result["uf"] ?? ""), postal_code: String(result["cep"] ?? ""),
     }};
   });
