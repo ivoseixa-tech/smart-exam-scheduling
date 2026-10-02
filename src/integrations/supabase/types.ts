@@ -462,6 +462,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_company_access_code: {
+        Args: {
+          _company_id: string
+          _expires_at?: string
+          _label?: string
+          _max_uses?: number
+          _plain_code: string
+        }
+        Returns: string
+      }
       current_company_id: { Args: never; Returns: string }
       has_role: {
         Args: {
@@ -470,6 +480,11 @@ export type Database = {
         }
         Returns: boolean
       }
+      initialize_profile: {
+        Args: { _full_name: string; _language?: string }
+        Returns: Json
+      }
+      join_company_with_code: { Args: { _plain_code: string }; Returns: string }
     }
     Enums: {
       app_role: "master" | "company_user"
