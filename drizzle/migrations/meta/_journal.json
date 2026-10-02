@@ -43,6 +43,13 @@
       "when": 1790962051064,
       "tag": "0005_require_master_user_approval",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790963162290,
+      "tag": "0006_optional_employee_documents_and_appointment_job_title",
+      "breakpoints": true
     }
   ]
 }
