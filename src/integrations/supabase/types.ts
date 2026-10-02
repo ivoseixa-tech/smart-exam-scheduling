@@ -14,16 +14,328 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      companies: {
+        Row: {
+          city: string | null
+          cnae_code: string | null
+          cnae_description: string | null
+          cnpj: string
+          complement: string | null
+          created_at: string
+          created_by: string
+          district: string | null
+          email: string | null
+          id: string
+          legal_name: string
+          number: string | null
+          phone: string | null
+          postal_code: string | null
+          registration_status: string | null
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          state: string | null
+          status: Database["public"]["Enums"]["company_status"]
+          street: string | null
+          trade_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          city?: string | null
+          cnae_code?: string | null
+          cnae_description?: string | null
+          cnpj: string
+          complement?: string | null
+          created_at?: string
+          created_by: string
+          district?: string | null
+          email?: string | null
+          id?: string
+          legal_name: string
+          number?: string | null
+          phone?: string | null
+          postal_code?: string | null
+          registration_status?: string | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          state?: string | null
+          status?: Database["public"]["Enums"]["company_status"]
+          street?: string | null
+          trade_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          city?: string | null
+          cnae_code?: string | null
+          cnae_description?: string | null
+          cnpj?: string
+          complement?: string | null
+          created_at?: string
+          created_by?: string
+          district?: string | null
+          email?: string | null
+          id?: string
+          legal_name?: string
+          number?: string | null
+          phone?: string | null
+          postal_code?: string | null
+          registration_status?: string | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          state?: string | null
+          status?: Database["public"]["Enums"]["company_status"]
+          street?: string | null
+          trade_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      company_access_codes: {
+        Row: {
+          code_hash: string
+          company_id: string
+          created_at: string
+          created_by: string
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          label: string
+          max_uses: number | null
+          use_count: number
+        }
+        Insert: {
+          code_hash: string
+          company_id: string
+          created_at?: string
+          created_by: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string
+          max_uses?: number | null
+          use_count?: number
+        }
+        Update: {
+          code_hash?: string
+          company_id?: string
+          created_at?: string
+          created_by?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string
+          max_uses?: number | null
+          use_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_access_codes_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employees: {
+        Row: {
+          admission_date: string
+          birth_date: string
+          birthplace: string
+          company_id: string
+          cpf: string
+          created_at: string
+          created_by: string
+          full_name: string
+          id: string
+          is_active: boolean
+          job_title: string
+          nationality: string
+          rg: string
+          sex: string
+          updated_at: string
+          workplace: string
+        }
+        Insert: {
+          admission_date: string
+          birth_date: string
+          birthplace: string
+          company_id: string
+          cpf: string
+          created_at?: string
+          created_by: string
+          full_name: string
+          id?: string
+          is_active?: boolean
+          job_title: string
+          nationality: string
+          rg: string
+          sex: string
+          updated_at?: string
+          workplace: string
+        }
+        Update: {
+          admission_date?: string
+          birth_date?: string
+          birthplace?: string
+          company_id?: string
+          cpf?: string
+          created_at?: string
+          created_by?: string
+          full_name?: string
+          id?: string
+          is_active?: boolean
+          job_title?: string
+          nationality?: string
+          rg?: string
+          sex?: string
+          updated_at?: string
+          workplace?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employees_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exams: {
+        Row: {
+          category: Database["public"]["Enums"]["exam_category"]
+          created_at: string
+          created_by: string | null
+          description_en: string | null
+          description_pt: string | null
+          duration_minutes: number
+          id: string
+          is_active: boolean
+          name_en: string
+          name_pt: string
+          preparation_en: string | null
+          preparation_pt: string | null
+          updated_at: string
+        }
+        Insert: {
+          category: Database["public"]["Enums"]["exam_category"]
+          created_at?: string
+          created_by?: string | null
+          description_en?: string | null
+          description_pt?: string | null
+          duration_minutes?: number
+          id?: string
+          is_active?: boolean
+          name_en: string
+          name_pt: string
+          preparation_en?: string | null
+          preparation_pt?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["exam_category"]
+          created_at?: string
+          created_by?: string | null
+          description_en?: string | null
+          description_pt?: string | null
+          duration_minutes?: number
+          id?: string
+          is_active?: boolean
+          name_en?: string
+          name_pt?: string
+          preparation_en?: string | null
+          preparation_pt?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          full_name: string
+          id: string
+          is_active: boolean
+          job_title: string | null
+          phone: string | null
+          preferred_language: string
+          updated_at: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          full_name: string
+          id: string
+          is_active?: boolean
+          job_title?: string | null
+          phone?: string | null
+          preferred_language?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          full_name?: string
+          id?: string
+          is_active?: boolean
+          job_title?: string | null
+          phone?: string | null
+          preferred_language?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      current_company_id: { Args: never; Returns: string }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "master" | "company_user"
+      appointment_status: "scheduled" | "confirmed" | "completed" | "cancelled"
+      company_status: "pending" | "approved" | "rejected" | "inactive"
+      exam_category: "clinical" | "complementary"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +462,11 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["master", "company_user"],
+      appointment_status: ["scheduled", "confirmed", "completed", "cancelled"],
+      company_status: ["pending", "approved", "rejected", "inactive"],
+      exam_category: ["clinical", "complementary"],
+    },
   },
 } as const
