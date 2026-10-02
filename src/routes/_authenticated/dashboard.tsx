@@ -18,7 +18,7 @@ type Company = { id:string; cnpj:string; legal_name:string; trade_name:string|nu
 type Employee = { id:string; company_id:string; full_name:string; cpf:string; rg:string; birthplace:string; nationality:string; birth_date:string; sex:string; job_title:string; admission_date:string; workplace:string; is_active:boolean };
 type Exam = { id:string; category:"clinical"|"complementary"; name_pt:string; name_en:string; duration_minutes:number; is_active:boolean };
 type Appointment = { id:string; company_id:string; employee_id:string; assessment_type:string; starts_at:string; ends_at:string; location:string; status:"scheduled"|"confirmed"|"completed"|"cancelled"; employees?: { full_name:string } | null };
-type Profile = { id:string; company_id:string|null; full_name:string; preferred_language:string };
+type Profile = { id:string; company_id:string|null; full_name:string; preferred_language:string; is_active:boolean };
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [
@@ -38,9 +38,10 @@ function DashboardPage() {
 
   async function load() {
     setLoading(true); const { data:userData }=await supabase.auth.getUser(); const user=userData.user; if(!user)return;
-    let { data:p }=await supabase.from("profiles").select("id,company_id,full_name,preferred_language").eq("id",user.id).maybeSingle();
-    if(!p){ await supabase.rpc("initialize_profile",{_full_name:String(user.user_metadata?.["full_name"] ?? user.email?.split("@")[0] ?? "Usuário"),_language:language}); const result=await supabase.from("profiles").select("id,company_id,full_name,preferred_language").eq("id",user.id).single(); p=result.data; }
+    let { data:p }=await supabase.from("profiles").select("id,company_id,full_name,preferred_language,is_active").eq("id",user.id).maybeSingle();
+    if(!p){ await supabase.rpc("initialize_profile",{_full_name:String(user.user_metadata?.["full_name"] ?? user.email?.split("@")[0] ?? "Usuário"),_language:language}); const result=await supabase.from("profiles").select("id,company_id,full_name,preferred_language,is_active").eq("id",user.id).single(); p=result.data; }
     if(p){setProfile(p); if(p.preferred_language==="pt"||p.preferred_language==="en")setLanguage(p.preferred_language);}
+    if(p&&!p.is_active){setLoading(false);return;}
     const [{data:roles},{data:companyRows},{data:employeeRows},{data:examRows},{data:appointmentRows}]=await Promise.all([
       supabase.from("user_roles").select("role").eq("user_id",user.id), supabase.from("companies").select("id,cnpj,legal_name,trade_name,status,city,state,registration_status,created_at").order("created_at",{ascending:false}),
       supabase.from("employees").select("*").order("full_name"), supabase.from("exams").select("id,category,name_pt,name_en,duration_minutes,is_active").order("category").order("name_pt"),
@@ -55,6 +56,8 @@ function DashboardPage() {
   const weekCount=appointments.filter(a=>new Date(a.starts_at).getTime()>=Date.now()&&new Date(a.starts_at).getTime()<Date.now()+604800000&&a.status!=="cancelled").length;
   const labels=language==="pt"?{hello:"Olá",companiesDesc:"Cadastros e validações de CNPJ",employeesDesc:"Dados ocupacionais e vínculos",examsDesc:"Catálogo clínico e complementar",scheduleDesc:"Atendimentos e status",join:"Vincular empresa",noCompany:"Sua conta ainda não está vinculada a uma empresa.",review:"Revisar",all:"Todos",clinical:"Clínicos",complementary:"Complementares"}:{hello:"Hello",companiesDesc:"CNPJ registrations and reviews",employeesDesc:"Occupational data and employment",examsDesc:"Clinical and complementary catalog",scheduleDesc:"Appointments and statuses",join:"Join company",noCompany:"Your account is not linked to a company yet.",review:"Review",all:"All",clinical:"Clinical",complementary:"Complementary"};
   const nav=[{id:"dashboard",label:t("dashboard"),icon:LayoutDashboard},{id:"companies",label:t("companies"),icon:Building2},{id:"employees",label:t("employees"),icon:UsersRound},{id:"exams",label:t("exams"),icon:Stethoscope},{id:"schedule",label:t("schedule"),icon:CalendarDays},{id:"users",label:language==="pt"?"Usuários":"Users",icon:UserRound}] as const;
+
+  if(!loading&&profile&&!profile.is_active)return <main className="grid min-h-screen place-items-center bg-background p-6"><section className="w-full max-w-lg rounded-md border bg-card p-8 text-center"><span className="mx-auto grid size-12 place-items-center rounded-md bg-accent text-primary"><Clock3/></span><h1 className="mt-5 text-2xl font-semibold">{language==="pt"?"Acesso aguardando aprovação":"Access awaiting approval"}</h1><p className="mt-3 text-muted-foreground">{language==="pt"?"Seu cadastro foi recebido. O usuário mestre precisa liberar seu acesso antes da entrada no sistema.":"Your registration was received. The master user must approve your access before you can enter the system."}</p><Button className="mt-6" variant="outline" onClick={signOut}>{t("signOut")}</Button></section></main>;
 
   return <div className="min-h-screen bg-background text-foreground"><aside className={`fixed inset-y-0 left-0 z-40 w-64 border-r border-sidebar-border bg-sidebar transition-transform lg:translate-x-0 ${mobile?"translate-x-0":"-translate-x-full"}`}>
     <div className="flex h-18 items-center justify-between border-b border-sidebar-border px-5"><button className="flex items-center gap-3" onClick={()=>setSection("dashboard")}><span className="grid size-9 place-items-center rounded-md bg-primary text-primary-foreground"><Activity className="size-5"/></span><span className="text-lg font-semibold">MedAgenda</span></button><Button variant="ghost" size="icon" className="lg:hidden" onClick={()=>setMobile(false)}><X/></Button></div>

@@ -36,6 +36,13 @@
       "when": 1790955805942,
       "tag": "0004_create_profile_access_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790962051064,
+      "tag": "0005_require_master_user_approval",
+      "breakpoints": true
     }
   ]
 }
