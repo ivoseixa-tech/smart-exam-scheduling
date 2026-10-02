@@ -1,18 +1,20 @@
-# Aprovação mestre para novos acessos
+# Plano — Correções de empresa, funcionário e agendamento
 
-## Resultado
-Novos cadastros ficam pendentes e não entram no sistema até o usuário mestre aprovar. O primeiro usuário mestre e os acessos já ativos permanecem liberados.
+## Objetivo
+Corrigir a consulta de CNPJ no cadastro de empresa e ajustar os campos solicitados sem interromper os fluxos existentes.
 
-## Implementação
-- Alterar a criação de perfil para marcar novos usuários comuns como inativos, mantendo o primeiro mestre ativo.
-- Após o cadastro, encerrar a sessão e exibir uma mensagem PT/EN informando que a aprovação está pendente.
-- No login, validar o estado do perfil e impedir a entrada enquanto estiver pendente.
-- Bloquear também acessos por Google na chegada ao painel, mostrando uma tela de espera sem dados operacionais.
-- Na área **Usuários**, mostrar o status e permitir ao mestre aprovar ou suspender contas.
-- Manter a aprovação protegida no servidor, com validação da função mestre antes de qualquer alteração.
+## Alterações
+- Tornar a consulta de CNPJ confiável, com validação e mensagens claras quando o serviço público estiver indisponível.
+- Preencher campos editáveis separados com os dados retornados: razão social, nome fantasia, situação, CNAE, contato e endereço completo; salvar exatamente os valores revisados no formulário.
+- Separar Nome e CPF em colunas próprias na listagem de funcionários.
+- Tornar RG e data de admissão opcionais no formulário e no banco de dados, mantendo os demais campos obrigatórios.
+- Incluir Função como campo obrigatório no novo agendamento, preenchido inicialmente pela função do funcionário selecionado e salvo no agendamento.
+- Atualizar os tipos da aplicação e as traduções PT/EN afetadas.
 
-## Validação
-- Confirmar que cadastro novo não acessa o painel.
-- Confirmar que o mestre vê e aprova usuários pendentes.
-- Confirmar que um usuário aprovado consegue entrar e um suspenso é bloqueado.
-- Verificar PT/EN, compilação e ausência de erros no navegador.
+## Segurança e validação
+- Validar CNPJ e todos os dados alterados tanto na tela quanto no servidor/banco.
+- Preservar o isolamento dos dados por empresa e as permissões atuais.
+
+## Verificação
+- Testar consulta e preenchimento do CNPJ, cadastro com RG/admissão vazios, separação Nome/CPF e criação de agendamento com Função.
+- Conferir compilação, erros do navegador e comportamento em desktop e celular.
