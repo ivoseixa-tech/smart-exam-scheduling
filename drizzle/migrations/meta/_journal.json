@@ -29,6 +29,13 @@
       "when": 1790955739323,
       "tag": "0003_create_access_and_audit_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790955805942,
+      "tag": "0004_create_profile_access_functions",
+      "breakpoints": true
     }
   ]
 }
