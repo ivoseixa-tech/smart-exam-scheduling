@@ -20,7 +20,7 @@ export function UserManagement({ language }: { language: "pt" | "en" }) {
 
   useEffect(() => {
     void listUsers().then(setUsers).catch((error: unknown) => setMessage(error instanceof Error ? error.message : "Erro ao carregar usuários.")).finally(() => setLoading(false));
-  }, [listUsers]);
+  }, []);
 
   const filtered = users.filter((user) => `${user.fullName} ${user.email} ${user.companyName ?? ""}`.toLowerCase().includes(query.toLowerCase()));
   const text = language === "pt" ? {
