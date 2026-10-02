@@ -28,19 +28,25 @@ function AuthPage() {
     title: "Saúde ocupacional, organizada.", subtitle: "Empresas, funcionários, exames e agenda em um único ambiente seguro.",
     signIn: "Entrar", signUp: "Criar acesso", email: "E-mail", password: "Senha", name: "Nome completo",
     new: "Primeiro acesso?", existing: "Já possui acesso?", google: "Continuar com Google", submitIn: "Acessar sistema", submitUp: "Criar minha conta",
-    feature1: "Dados separados por empresa", feature2: "Agenda e exames integrados", feature3: "Revisão de CNPJ pelo administrador",
+    feature1: "Dados separados por empresa", feature2: "Agenda e exames integrados", feature3: "Acesso aprovado pelo usuário mestre", pending: "Cadastro recebido. Aguarde a aprovação do usuário mestre para acessar o sistema.",
   } : {
     title: "Occupational health, organized.", subtitle: "Companies, employees, exams and schedules in one secure workspace.",
     signIn: "Sign in", signUp: "Create access", email: "Email", password: "Password", name: "Full name",
     new: "First access?", existing: "Already registered?", google: "Continue with Google", submitIn: "Open system", submitUp: "Create my account",
-    feature1: "Company-isolated data", feature2: "Integrated schedule and exams", feature3: "Admin CNPJ review",
+    feature1: "Company-isolated data", feature2: "Integrated schedule and exams", feature3: "Access approved by the master user", pending: "Registration received. Wait for the master user to approve your access.",
   };
 
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setMessage("");
     if (mode === "signin") {
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-      if (error) setMessage(error.message); else await navigate({ to: "/dashboard" });
+      if (error) setMessage(error.message);
+      else {
+        const { data: userData } = await supabase.auth.getUser();
+        const { data: profile } = await supabase.from("profiles").select("is_active").eq("id", userData.user?.id ?? "").maybeSingle();
+        if (profile && !profile.is_active) { await supabase.auth.signOut(); setMessage(copy.pending); }
+        else await navigate({ to: "/dashboard" });
+      }
     } else {
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
@@ -52,7 +58,12 @@ function AuthPage() {
       });
       if (error) setMessage(error.message);
       else if (!data.session) setMessage(language === "pt" ? "Não foi possível iniciar o acesso. Tente entrar com a conta criada." : "Access could not be started. Try signing in with the account you created.");
-      else { await supabase.rpc("initialize_profile", { _full_name: fullName.trim(), _language: language }); await navigate({ to: "/dashboard" }); }
+      else {
+        const { data: profile } = await supabase.rpc("initialize_profile", { _full_name: fullName.trim(), _language: language });
+        const active = typeof profile === "object" && profile !== null && !Array.isArray(profile) && profile["is_active"] === true;
+        if (active) await navigate({ to: "/dashboard" });
+        else { await supabase.auth.signOut(); setMode("signin"); setPassword(""); setMessage(copy.pending); }
+      }
     }
     setBusy(false);
   }

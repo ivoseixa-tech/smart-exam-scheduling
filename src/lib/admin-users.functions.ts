@@ -45,3 +45,16 @@ export const resetManagedUserPassword = createServerFn({ method: "POST" })
     if (error) throw new Error("Não foi possível alterar a senha deste usuário.");
     return { ok: true };
   });
+
+export const setManagedUserApproval = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ userId: z.string().uuid(), approved: z.boolean() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: isMaster, error: roleError } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "master" });
+    if (roleError || !isMaster) throw new Error("Acesso permitido somente ao usuário mestre.");
+    if (data.userId === context.userId && !data.approved) throw new Error("O usuário mestre não pode suspender o próprio acesso.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("profiles").update({ is_active: data.approved }).eq("id", data.userId);
+    if (error) throw new Error("Não foi possível alterar a aprovação deste usuário.");
+    return { ok: true };
+  });

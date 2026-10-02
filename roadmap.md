@@ -6,4 +6,4 @@
 - [x] Adicionar PT/EN e validar toda a experiência
 - [x] Permitir cadastro imediato sem confirmação por e-mail
 - [x] Permitir ao mestre listar usuários e redefinir senhas com validação no servidor
-- [ ] Exigir aprovação do mestre para liberar novos usuários
+- [x] Exigir aprovação do mestre para liberar novos usuários
