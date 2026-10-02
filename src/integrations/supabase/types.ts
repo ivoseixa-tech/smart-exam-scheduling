@@ -14,6 +14,83 @@ export type Database = {
   }
   public: {
     Tables: {
+      appointment_exams: {
+        Row: {
+          appointment_id: string
+          exam_id: string
+        }
+        Insert: {
+          appointment_id: string
+          exam_id: string
+        }
+        Update: {
+          appointment_id?: string
+          exam_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointment_exams_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointment_exams_exam_id_fkey"
+            columns: ["exam_id"]
+            isOneToOne: false
+            referencedRelation: "exams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      appointment_history: {
+        Row: {
+          action: string
+          actor_id: string
+          appointment_id: string
+          created_at: string
+          details: Json
+          id: string
+          new_status: Database["public"]["Enums"]["appointment_status"] | null
+          previous_status:
+            | Database["public"]["Enums"]["appointment_status"]
+            | null
+        }
+        Insert: {
+          action: string
+          actor_id: string
+          appointment_id: string
+          created_at?: string
+          details?: Json
+          id?: string
+          new_status?: Database["public"]["Enums"]["appointment_status"] | null
+          previous_status?:
+            | Database["public"]["Enums"]["appointment_status"]
+            | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string
+          appointment_id?: string
+          created_at?: string
+          details?: Json
+          id?: string
+          new_status?: Database["public"]["Enums"]["appointment_status"] | null
+          previous_status?:
+            | Database["public"]["Enums"]["appointment_status"]
+            | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointment_history_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointments: {
         Row: {
           assessment_type: string
