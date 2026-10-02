@@ -14,3 +14,4 @@
 - Put authenticated application pages under the managed `_authenticated` layout because browser sessions are client-side.
 - Keep privileged user administration in authenticated server functions with a server-side master-role check before admin access.
 - Keep newly registered non-master profiles inactive until a master approves them, because authentication alone must not grant application access.
+- Record the employee job title on each appointment because scheduling must preserve the occupational role used at that time.
