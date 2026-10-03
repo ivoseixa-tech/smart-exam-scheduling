@@ -67,6 +67,38 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
       throw new Error('Unauthorized: Invalid token');
     }
 
+    // Validate the access token directly against Supabase Auth.
+    // This intentionally bypasses the SDK JWT/JWKS verification path that
+    // can fail with "JWK not found" in the server runtime.
+    const authResponse = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      method: 'GET',
+      headers: {
+        apikey: SUPABASE_PUBLISHABLE_KEY,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!authResponse.ok) {
+      throw new Error('Unauthorized: Invalid token');
+    }
+
+    const authData = await authResponse.json() as {
+      id?: string;
+      role?: string;
+      email?: string;
+      user?: {
+        id?: string;
+        role?: string;
+        email?: string;
+      };
+    };
+
+    const user = authData.user ?? authData;
+    if (!user?.id) {
+      throw new Error('Unauthorized: Invalid token');
+    }
+
+    // Keep the Supabase client for existing server-side RPC/data operations.
     const supabase = createClient<Database>(
       SUPABASE_URL,
       SUPABASE_PUBLISHABLE_KEY,
@@ -85,21 +117,14 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
       }
     );
 
-    // Validate the token directly with the Supabase Auth server.
-    // This avoids local JWKS lookup errors in the server runtime.
-    const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data?.user) {
-      throw new Error('Unauthorized: Invalid token');
-    }
-
     return next({
       context: {
         supabase,
-        userId: data.user.id,
+        userId: user.id,
         claims: {
-          sub: data.user.id,
-          role: data.user.role,
-          email: data.user.email,
+          sub: user.id,
+          role: user.role,
+          email: user.email,
         },
       },
     });
