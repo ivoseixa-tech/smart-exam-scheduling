@@ -144,79 +144,39 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-type NeonHttpResult<T = Record<string, unknown>> = {
-  rows?: T[];
-  results?: Array<{ rows?: T[] }>;
-};
+const CLINIC_API_URL = "https://br-royal-forest-b469fwmo-clinicapi.compute.c-6.us-east-2.aws.neon.tech/";
 
-function getNeonHttpConfig() {
-  const databaseUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
+async function callClinicApi(action: "list" | "create", data?: unknown) {
+  const request = getRequest();
+  const authorization = request?.headers?.get("authorization");
 
-  if (!databaseUrl) {
-    throw new Error("Conexão PostgreSQL do Neon não configurada no ambiente do servidor.");
+  if (!authorization?.startsWith("Bearer ")) {
+    throw new Error("Não autenticado.");
   }
 
-  let parsed: URL;
-  try {
-    parsed = new URL(databaseUrl);
-  } catch {
-    throw new Error("DATABASE_URL/NEON_DATABASE_URL precisa ser a URL completa de conexão do PostgreSQL do Neon.");
-  }
-
-  if (!["postgres:", "postgresql:"].includes(parsed.protocol) || !parsed.hostname) {
-    throw new Error("DATABASE_URL/NEON_DATABASE_URL não é uma conexão PostgreSQL válida.");
-  }
-
-  return {
-    endpoint: `https://${parsed.hostname}/sql`,
-    connectionString: databaseUrl,
-  };
-}
-
-async function queryNeonHttp<T = Record<string, unknown>>(
-  query: string,
-  params: unknown[] = [],
-): Promise<T[]> {
-  const { endpoint, connectionString } = getNeonHttpConfig();
-
-  const response = await fetch(endpoint, {
+  const response = await fetch(CLINIC_API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Neon-Connection-String": connectionString,
+      Authorization: authorization,
     },
-    body: JSON.stringify({ query, params }),
+    body: JSON.stringify({ action, data }),
   });
 
   const bodyText = await response.text();
-  let body: NeonHttpResult<T> | { message?: string; error?: string };
+  let body: { ok?: boolean; data?: unknown; error?: string };
 
   try {
     body = JSON.parse(bodyText) as typeof body;
   } catch {
-    body = { message: bodyText || "Resposta inválida do Neon." };
+    body = { error: bodyText || "Resposta inválida do serviço de clínicas." };
   }
 
-  if (!response.ok) {
-    const message =
-      "message" in body && typeof body.message === "string"
-        ? body.message
-        : "error" in body && typeof body.error === "string"
-          ? body.error
-          : `Neon HTTP respondeu com status ${response.status}.`;
-
-    throw new Error(message);
+  if (!response.ok || body.ok === false) {
+    throw new Error(body.error || ("Serviço de clínicas respondeu com status " + response.status + "."));
   }
 
-  if ("rows" in body && Array.isArray(body.rows)) {
-    return body.rows;
-  }
-
-  if ("results" in body && Array.isArray(body.results)) {
-    return body.results.flatMap((result) => Array.isArray(result.rows) ? result.rows : []);
-  }
-
-  return [];
+  return body.data;
 }
 
 export const listClinics = createServerFn({ method: "GET" })
@@ -224,12 +184,8 @@ export const listClinics = createServerFn({ method: "GET" })
     await authenticateClinicRequest();
 
     try {
-      const rows = await queryNeonHttp<{ data: unknown }>("SELECT public.list_clinics() AS data");
-      const data = rows[0]?.data;
-      if (!Array.isArray(data)) {
-        return [];
-      }
-      return JSON.parse(JSON.stringify(data)) as unknown[];
+      const data = await callClinicApi("list");
+      return Array.isArray(data) ? JSON.parse(JSON.stringify(data)) as unknown[] : [];
     } catch (error) {
       const message = getErrorMessage(error, "Falha ao consultar as clínicas.");
       console.error("[Clinic:listClinics]", message);
@@ -243,12 +199,7 @@ export const createClinicWithSchedule = createServerFn({ method: "POST" })
     const auth = await authenticateClinicRequest();
 
     try {
-      const rows = await queryNeonHttp<{ data: unknown }>(
-        "SELECT public.create_clinic_with_schedule($1::jsonb, $2::uuid) AS data",
-        [JSON.stringify(data), auth.userId],
-      );
-
-      const result = rows[0]?.data as { ok?: boolean; clinicId?: string; slotCount?: number } | null;
+      const result = await callClinicApi("create", data) as { ok?: boolean; clinicId?: string; slotCount?: number } | null;
       if (!result?.ok || typeof result.clinicId !== "string") {
         throw new Error("Não foi possível concluir o cadastro da clínica.");
       }
