@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
-import { neon } from "@neondatabase/serverless";
+import { neon, neonConfig } from "@neondatabase/serverless";
 import { z } from "zod";
 
 const clinicInput = z.object({
@@ -157,6 +157,11 @@ function getClinicSql() {
   } catch {
     throw new Error("DATABASE_URL/NEON_DATABASE_URL precisa ser a URL completa de conexão do PostgreSQL do Neon.");
   }
+
+  // Force the one-shot Neon driver onto its HTTP /sql transport.
+  // This prevents any WebSocket handshake from being attempted in the
+  // Lovable/Cloudflare server runtime, where the Neon WS endpoint can return 403.
+  neonConfig.fetchEndpoint = (host) => `https://${host}/sql`;
 
   return neon(databaseUrl);
 }
