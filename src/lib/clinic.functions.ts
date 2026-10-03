@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
-import { neon } from "@neondatabase/serverless";
+import { neonConfig, Pool } from "@neondatabase/serverless";
 import { z } from "zod";
 
 const clinicInput = z.object({
@@ -114,7 +114,7 @@ async function authenticateClinicRequest(): Promise<ClinicAuth> {
   };
 }
 
-function getClinicSql() {
+function getClinicPool() {
   const databaseUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
 
   if (!databaseUrl) {
@@ -127,16 +127,24 @@ function getClinicSql() {
     throw new Error("DATABASE_URL/NEON_DATABASE_URL precisa ser a URL completa de conexão do PostgreSQL do Neon.");
   }
 
-  return neon(databaseUrl);
+  if (typeof WebSocket !== "undefined") {
+    neonConfig.webSocketConstructor = WebSocket;
+  }
+
+  return new Pool({ connectionString: databaseUrl, max: 1 });
 }
 
 export const listClinics = createServerFn({ method: "GET" })
   .handler(async () => {
     await authenticateClinicRequest();
 
-    const sql = getClinicSql();
-    const rows = await sql`SELECT public.list_clinics() AS data`;
-    return rows[0]?.data ?? [];
+    const pool = getClinicPool();
+    try {
+      const { rows } = await pool.query("SELECT public.list_clinics() AS data");
+      return rows[0]?.data ?? [];
+    } finally {
+      await pool.end();
+    }
   });
 
 export const createClinicWithSchedule = createServerFn({ method: "POST" })
@@ -144,18 +152,20 @@ export const createClinicWithSchedule = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const auth = await authenticateClinicRequest();
 
-    const sql = getClinicSql();
-    const rows = await sql`
-      SELECT public.create_clinic_with_schedule(
-        ${JSON.stringify(data)}::jsonb,
-        ${auth.userId}::uuid
-      ) AS data
-    `;
+    const pool = getClinicPool();
+    try {
+      const { rows } = await pool.query(
+        "SELECT public.create_clinic_with_schedule($1::jsonb, $2::uuid) AS data",
+        [JSON.stringify(data), auth.userId],
+      );
 
-    const result = rows[0]?.data;
-    if (!result || result.ok !== true) {
-      throw new Error("Não foi possível concluir o cadastro da clínica.");
+      const result = rows[0]?.data;
+      if (!result || result.ok !== true) {
+        throw new Error("Não foi possível concluir o cadastro da clínica.");
+      }
+
+      return result;
+    } finally {
+      await pool.end();
     }
-
-    return result;
   });
