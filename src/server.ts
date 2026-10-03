@@ -2,12 +2,8 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
-import handler from "@tanstack/react-start/server-entry";
+import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 
-// Keep the custom entrypoint deliberately thin. TanStack Start's server entry
-// uses the standard fetch(request) contract; passing Cloudflare's env/ctx as
-// handler arguments can make SSR fail with a generic "This page didn't load"
-// response on hosted previews.
 async function normalizeCatastrophicSsrResponse(response: Response): Promise<Response> {
   if (response.status < 500) return response;
   const contentType = response.headers.get("content-type") ?? "";
@@ -32,8 +28,8 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
-export default {
-  async fetch(request: Request): Promise<Response> {
+export default createServerEntry({
+  async fetch(request) {
     try {
       const response = await handler.fetch(request);
       return await normalizeCatastrophicSsrResponse(response);
@@ -45,4 +41,4 @@ export default {
       });
     }
   },
-};
+});
