@@ -3,11 +3,6 @@ import { neon } from "@neondatabase/serverless";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error("DATABASE_URL não configurada para o banco PostgreSQL externo.");
-
-const sql = neon(databaseUrl);
-
 const clinicInput = z.object({
   name: z.string().trim().min(2).max(160),
   street: z.string().trim().min(2).max(200),
@@ -35,6 +30,10 @@ export const listClinics = createServerFn({ method: "GET" })
       _role: "master",
     });
     if (roleError || !isMaster) throw new Error("Acesso permitido somente ao usuário mestre.");
+
+    const databaseUrl = process.env.DATABASE_URL;
+    if (!databaseUrl) throw new Error("DATABASE_URL não configurada para o banco PostgreSQL externo.");
+    const sql = neon(databaseUrl);
 
     const clinics = await sql`
       SELECT
@@ -85,6 +84,10 @@ export const createClinicWithSchedule = createServerFn({ method: "POST" })
     });
     if (roleError || !isMaster) throw new Error("Acesso permitido somente ao usuário mestre.");
 
+    const databaseUrl = process.env.DATABASE_URL;
+    if (!databaseUrl) throw new Error("DATABASE_URL não configurada para o banco PostgreSQL externo.");
+    const sql = neon(databaseUrl);
+
     const duplicate = await sql`
       SELECT id FROM public.clinics
       WHERE lower(name) = lower(${data.name})
@@ -134,5 +137,31 @@ export const createClinicWithSchedule = createServerFn({ method: "POST" })
       throw error;
     }
 
-    return { ok: true, clinicId, slotCount: 0 };
+    let slotCount = 0;
+    const startDate = new Date();
+    startDate.setHours(0, 0, 0, 0);
+    for (let offset = 0; offset < 180; offset += 1) {
+      const day = new Date(startDate);
+      day.setDate(startDate.getDate() + offset);
+      const weekday = day.getDay();
+      for (const rule of data.schedule.filter((item) => item.weekday === weekday)) {
+        const [startHour, startMinute] = rule.start_time.split(":").map(Number);
+        const [endHour, endMinute] = rule.end_time.split(":").map(Number);
+        const start = startHour * 60 + startMinute;
+        const end = endHour * 60 + endMinute;
+        for (let minute = start; minute + rule.slot_minutes <= end; minute += rule.slot_minutes) {
+          const startsAt = new Date(day);
+          startsAt.setHours(Math.floor(minute / 60), minute % 60, 0, 0);
+          const endsAt = new Date(startsAt.getTime() + rule.slot_minutes * 60_000);
+          await sql`
+            INSERT INTO public.clinic_slots (clinic_id, starts_at, ends_at)
+            VALUES (${clinicId}::uuid, ${startsAt.toISOString()}::timestamptz, ${endsAt.toISOString()}::timestamptz)
+            ON CONFLICT (clinic_id, starts_at) DO NOTHING
+          `;
+          slotCount += 1;
+        }
+      }
+    }
+
+    return { ok: true, clinicId, slotCount };
   });
