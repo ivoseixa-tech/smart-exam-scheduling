@@ -1,9 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
+import { neon } from "@neondatabase/serverless";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-
-const CLINIC_API_URL = "https://ep-frosty-haze-b4w572k4.apirest.c-6.us-east-2.aws.neon.tech/neondb/rest/v1";
 
 const clinicInput = z.object({
   name: z.string().trim().min(2).max(160),
@@ -24,63 +22,64 @@ const clinicInput = z.object({
   })).min(1),
 });
 
-async function callClinicApi(path: string, body: unknown) {
-  const request = getRequest();
-  const authorization = request?.headers.get("authorization");
+function getClinicSql() {
+  const databaseUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
 
-  if (!authorization?.startsWith("Bearer ")) {
-    throw new Error("Sessão de usuário não encontrada.");
+  if (!databaseUrl) {
+    throw new Error("Conexão PostgreSQL do Neon não configurada no ambiente do servidor.");
   }
 
-  const response = await fetch(`${CLINIC_API_URL}${path}`, {
-    method: "POST",
-    headers: {
-      Authorization: authorization,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-
-  const raw = await response.text();
-  let data: unknown = null;
   try {
-    data = raw ? JSON.parse(raw) : null;
+    new URL(databaseUrl);
   } catch {
-    throw new Error("Resposta inválida do serviço de clínicas.");
+    throw new Error("DATABASE_URL/NEON_DATABASE_URL precisa ser a URL completa de conexão do PostgreSQL do Neon.");
   }
 
-  if (!response.ok) {
-    const message =
-      typeof data === "object" &&
-      data !== null &&
-      "message" in data &&
-      typeof data.message === "string"
-        ? data.message
-        : typeof data === "object" &&
-          data !== null &&
-          "error" in data &&
-          typeof data.error === "string"
-        ? data.error
-        : `Erro no serviço de clínicas (HTTP ${response.status}).`;
-    throw new Error(message);
-  }
-
-  return data;
+  return neon(databaseUrl);
 }
 
 export const listClinics = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async () => {
-    return callClinicApi("/rpc/list_clinics", {});
+  .handler(async ({ context }) => {
+    const { data: isMaster, error: roleError } = await context.supabase.rpc("has_role", {
+      _user_id: context.userId,
+      _role: "master",
+    });
+
+    if (roleError || !isMaster) {
+      throw new Error("Acesso permitido somente ao usuário mestre.");
+    }
+
+    const sql = getClinicSql();
+    const rows = await sql`SELECT public.list_clinics() AS data`;
+    return rows[0]?.data ?? [];
   });
 
 export const createClinicWithSchedule = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => clinicInput.parse(input))
   .handler(async ({ data, context }) => {
-    return callClinicApi("/rpc/create_clinic_with_schedule", {
-      p_data: data,
-      p_user_id: context.userId,
+    const { data: isMaster, error: roleError } = await context.supabase.rpc("has_role", {
+      _user_id: context.userId,
+      _role: "master",
     });
+
+    if (roleError || !isMaster) {
+      throw new Error("Acesso permitido somente ao usuário mestre.");
+    }
+
+    const sql = getClinicSql();
+    const rows = await sql`
+      SELECT public.create_clinic_with_schedule(
+        ${JSON.stringify(data)}::jsonb,
+        ${context.userId}::uuid
+      ) AS data
+    `;
+
+    const result = rows[0]?.data;
+    if (!result || result.ok !== true) {
+      throw new Error("Não foi possível concluir o cadastro da clínica.");
+    }
+
+    return result;
   });
