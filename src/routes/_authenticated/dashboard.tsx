@@ -210,14 +210,14 @@ function ClinicDialog({open,onClose,onSaved,companies,language,clinic}:{open:boo
   return <DialogFrame open={open} onClose={onClose} onSubmit={submit} title={clinic?(language==="pt"?"Editar clínica de atendimento":"Edit service clinic"):(language==="pt"?"Cadastrar clínica de atendimento":"Register service clinic")} description={clinic?(language==="pt"?"Atualize endereço, empresas habilitadas e agenda semanal.":"Update the address, enabled companies and weekly schedule."):(language==="pt"?"Cadastre endereço, empresas habilitadas e agenda semanal. Os horários serão gerados automaticamente.":"Register the address, enabled companies and weekly schedule. Time slots will be generated automatically."}>
     <div className="grid gap-4 sm:grid-cols-2">
       <div className="sm:col-span-2"><Field label={language==="pt"?"Nome da clínica":"Clinic name"} name="name" defaultValue={clinic?.name}/></div>
-      <Field label={language==="pt"?"Logradouro":"Street"} name="street"/>
-      <Field label={language==="pt"?"Número":"Number"} name="number" required={false}/>
-      <Field label={language==="pt"?"Complemento":"Address details"} name="complement" required={false}/>
-      <Field label={language==="pt"?"Bairro":"District"} name="district" required={false}/>
-      <Field label={language==="pt"?"Cidade":"City"} name="city"/>
-      <Field label="UF" name="state"/>
-      <Field label="CEP" name="postal_code" required={false}/>
-      <Field label={language==="pt"?"Telefone":"Phone"} name="phone" required={false}/>
+      <Field label={language==="pt"?"Logradouro":"Street"} name="street" defaultValue={clinic?.street}/>
+      <Field label={language==="pt"?"Número":"Number"} name="number" required={false} defaultValue={clinic?.number??""}/>
+      <Field label={language==="pt"?"Complemento":"Address details"} name="complement" required={false} defaultValue={clinic?.complement??""}/>
+      <Field label={language==="pt"?"Bairro":"District"} name="district" required={false} defaultValue={clinic?.district??""}/>
+      <Field label={language==="pt"?"Cidade":"City"} name="city" defaultValue={clinic?.city}/>
+      <Field label="UF" name="state" defaultValue={clinic?.state}/>
+      <Field label="CEP" name="postal_code" required={false} defaultValue={clinic?.postal_code??""}/>
+      <Field label={language==="pt"?"Telefone":"Phone"} name="phone" required={false} defaultValue={clinic?.phone??""}/>
     </div>
     <div className="space-y-3 border-t pt-5">
       <div><p className="font-semibold">{language==="pt"?"Empresas habilitadas":"Enabled companies"}</p><p className="text-sm text-muted-foreground">{language==="pt"?"Somente estas empresas poderão agendar nesta clínica.":"Only these companies can schedule at this clinic."}</p></div>
