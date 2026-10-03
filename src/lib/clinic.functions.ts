@@ -62,11 +62,20 @@ async function callClinicApi(action: "list" | "create", data?: unknown) {
     throw new Error("Não autenticado.");
   }
 
+  const supabaseUrl = process.env["SUPABASE_URL"];
+  const supabasePublishableKey = process.env["SUPABASE_PUBLISHABLE_KEY"];
+
+  if (!supabaseUrl || !supabasePublishableKey) {
+    throw new Error("Configuração do Supabase não disponível no servidor da aplicação.");
+  }
+
   const response = await fetch(CLINIC_API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: authorization,
+      "X-Supabase-URL": supabaseUrl,
+      "X-Supabase-Publishable-Key": supabasePublishableKey,
     },
     body: JSON.stringify({ action, data }),
   });
