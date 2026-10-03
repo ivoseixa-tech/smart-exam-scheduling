@@ -5,7 +5,8 @@ import { Activity, Bell, Building2, CalendarDays, Check, ChevronRight, Clipboard
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
 import { lookupCnpj } from "@/lib/cnpj.functions";
-import { createClinicWithSchedule, createCompanyAgendaUser } from "@/lib/admin-users.functions";
+import { createCompanyAgendaUser } from "@/lib/admin-users.functions";
+import { createClinicWithSchedule, listClinics } from "@/lib/clinic.functions";
 import { UserManagement } from "@/components/UserManagement";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +25,7 @@ type Exam = { id:string; category:"clinical"|"complementary"; name_pt:string; na
 type Appointment = { id:string; company_id:string; employee_id:string; assessment_type:string; job_title:string|null; starts_at:string; ends_at:string; location:string; location_id:string|null; notes:string|null; status:"scheduled"|"confirmed"|"completed"|"cancelled"; employees?: { full_name:string; cpf:string } | null; appointment_exams?: { exams:{ name_pt:string; name_en:string }|null }[] };
 type Profile = { id:string; company_id:string|null; full_name:string; preferred_language:string; is_active:boolean };
 type OccupationalFunction = { id:string; company_id:string; name:string; is_active:boolean; occupational_function_exams?:{exam_id:string}[] };
-type ExamLocation = { id:string; name:string; street:string; number:string|null; complement:string|null; district:string|null; city:string; state:string; postal_code:string|null; phone:string|null; instructions_pt:string|null; instructions_en:string|null; is_active:boolean };
+type ExamLocation = { id:string; name:string; street:string; number:string|null; complement:string|null; district:string|null; city:string; state:string; postal_code:string|null; phone:string|null; is_active:boolean };
 type AvailabilitySlot = { id:string; location_id:string; starts_at:string; ends_at:string; is_active:boolean; exam_locations?:{name:string}|null };
 type LocationCompany = { location_id:string; company_id:string };
 type LocationScheduleRule = { id:string; location_id:string; weekday:number; start_time:string; end_time:string; slot_minutes:number; is_active:boolean };
@@ -46,6 +47,7 @@ function DashboardPage() {
   const [employees,setEmployees]=useState<Employee[]>([]); const [exams,setExams]=useState<Exam[]>([]); const [appointments,setAppointments]=useState<Appointment[]>([]);
   const [functions,setFunctions]=useState<OccupationalFunction[]>([]); const [locations,setLocations]=useState<ExamLocation[]>([]); const [slots,setSlots]=useState<AvailabilitySlot[]>([]); const [locationCompanies,setLocationCompanies]=useState<LocationCompany[]>([]); const [locationSchedules,setLocationSchedules]=useState<LocationScheduleRule[]>([]); const [notifications,setNotifications]=useState<Notification[]>([]);
   const [employeeExamIds,setEmployeeExamIds]=useState<Record<string,string[]>>({});
+  const runListClinics=useServerFn(listClinics);
   const [dialog,setDialog]=useState<"company"|"employee"|"exam"|"function"|"location"|"slot"|"appointment"|"join"|"agendaAccess"|null>(null); const [selectedCompany,setSelectedCompany]=useState<Company|null>(null); const [query,setQuery]=useState(""); const [notice,setNotice]=useState("");
 
   async function load() {
@@ -54,15 +56,26 @@ function DashboardPage() {
     if(!p){ await supabase.rpc("initialize_profile",{_full_name:String(user.user_metadata?.["full_name"] ?? user.email?.split("@")[0] ?? "Usuário"),_language:language}); const result=await supabase.from("profiles").select("id,company_id,full_name,preferred_language,is_active").eq("id",user.id).single(); p=result.data; }
     if(p){setProfile(p); if(p.preferred_language==="pt"||p.preferred_language==="en")setLanguage(p.preferred_language);}
     if(p&&!p.is_active){setLoading(false);return;}
-    const [{data:roles},{data:companyRows},{data:employeeRows},{data:examRows},{data:appointmentRows},{data:functionRows},{data:locationRows},{data:slotRows},{data:locationCompanyRows},{data:locationScheduleRows},{data:notificationRows},{data:employeeExamRows}]=await Promise.all([
+    const [{data:roles},{data:companyRows},{data:employeeRows},{data:examRows},{data:appointmentRows},{data:functionRows},{data:slotRows},{data:notificationRows},{data:employeeExamRows}]=await Promise.all([
       supabase.from("user_roles").select("role").eq("user_id",user.id), supabase.from("companies").select("id,cnpj,legal_name,trade_name,status,street,number,complement,district,city,state,postal_code,registration_status,cnae_code,cnae_description,email,phone,created_at").order("created_at",{ascending:false}),
       supabase.from("employees").select("*").order("full_name"), supabase.from("exams").select("id,category,name_pt,name_en,duration_minutes,is_active").order("category").order("name_pt"),
       supabase.from("appointments").select("id,company_id,employee_id,assessment_type,job_title,starts_at,ends_at,location,location_id,notes,status,employees(full_name,cpf),appointment_exams(exams(name_pt,name_en))").order("starts_at"),
       supabase.from("occupational_functions").select("id,company_id,name,is_active,occupational_function_exams(exam_id)").order("name"),
-      supabase.from("exam_locations").select("*").order("name"), supabase.from("availability_slots").select("*,exam_locations(name)").order("starts_at"), supabase.from("exam_location_companies").select("location_id,company_id"), supabase.from("exam_location_schedule_rules").select("id,location_id,weekday,start_time,end_time,slot_minutes,is_active").order("weekday").order("start_time"),
+      supabase.from("availability_slots").select("*,exam_locations(name)").order("starts_at"),
       supabase.from("notifications").select("id,appointment_id,is_read,created_at").order("created_at",{ascending:false}), supabase.from("employee_exams").select("employee_id,exam_id"),
     ]);
-    setIsMaster(Boolean(roles?.some(r=>r.role==="master"))); setCompanies((companyRows??[]) as Company[]); setEmployees((employeeRows??[]) as Employee[]); setExams((examRows??[]) as Exam[]); setAppointments((appointmentRows??[]) as Appointment[]); setFunctions((functionRows??[]) as OccupationalFunction[]); setLocations((locationRows??[]) as ExamLocation[]); setSlots((slotRows??[]) as AvailabilitySlot[]); setLocationCompanies((locationCompanyRows??[]) as LocationCompany[]); setLocationSchedules((locationScheduleRows??[]) as LocationScheduleRule[]); setNotifications(notificationRows??[]); setEmployeeExamIds((employeeExamRows??[]).reduce<Record<string,string[]>>((all,row)=>({...all,[row.employee_id]:[...(all[row.employee_id]??[]),row.exam_id]}),{})); setLoading(false);
+    const master=Boolean(roles?.some(r=>r.role==="master"));
+    setIsMaster(master); setCompanies((companyRows??[]) as Company[]); setEmployees((employeeRows??[]) as Employee[]); setExams((examRows??[]) as Exam[]); setAppointments((appointmentRows??[]) as Appointment[]); setFunctions((functionRows??[]) as OccupationalFunction[]); setSlots((slotRows??[]) as AvailabilitySlot[]); setNotifications(notificationRows??[]); setEmployeeExamIds((employeeExamRows??[]).reduce<Record<string,string[]>>((all,row)=>({...all,[row.employee_id]:[...(all[row.employee_id]??[]),row.exam_id]}),{}));
+    try {
+      const clinicRows=await runListClinics();
+      const clinicList=clinicRows as unknown as (ExamLocation & {companies:LocationCompany[];schedule_rules:LocationScheduleRule[]})[];
+      setLocations(clinicList);
+      setLocationCompanies(clinicList.flatMap(row=>row.companies??[]));
+      setLocationSchedules(clinicList.flatMap(row=>row.schedule_rules??[]));
+    } catch {
+      setLocations([]); setLocationCompanies([]); setLocationSchedules([]);
+    }
+    setLoading(false);
   }
   useEffect(()=>{void load();},[]);
   async function signOut(){await supabase.auth.signOut();await navigate({to:"/auth",replace:true});}
