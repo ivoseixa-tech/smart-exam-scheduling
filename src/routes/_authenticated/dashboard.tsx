@@ -24,7 +24,9 @@ type Appointment = { id:string; company_id:string; employee_id:string; assessmen
 type Profile = { id:string; company_id:string|null; full_name:string; preferred_language:string; is_active:boolean };
 type OccupationalFunction = { id:string; company_id:string; name:string; is_active:boolean; occupational_function_exams?:{exam_id:string}[] };
 type ExamLocation = { id:string; name:string; street:string; number:string|null; complement:string|null; district:string|null; city:string; state:string; postal_code:string|null; phone:string|null; instructions_pt:string|null; instructions_en:string|null; is_active:boolean };
-type AvailabilitySlot = { id:string; location_id:string; starts_at:string; ends_at:string; is_active:boolean; exam_locations?:{name:string}|null };\ntype LocationCompany = { location_id:string; company_id:string };\ntype LocationScheduleRule = { id:string; location_id:string; weekday:number; start_time:string; end_time:string; slot_minutes:number; is_active:boolean };
+type AvailabilitySlot = { id:string; location_id:string; starts_at:string; ends_at:string; is_active:boolean; exam_locations?:{name:string}|null };
+type LocationCompany = { location_id:string; company_id:string };
+type LocationScheduleRule = { id:string; location_id:string; weekday:number; start_time:string; end_time:string; slot_minutes:number; is_active:boolean };
 type Notification = { id:string; appointment_id:string|null; is_read:boolean; created_at:string };
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -88,7 +90,8 @@ function DashboardPage() {
     <CompanyDialog open={dialog==="company"} onClose={()=>setDialog(null)} language={language} onSaved={async()=>{setDialog(null);setNotice("Empresa enviada para revisão.");await load()}}/>
     <EmployeeDialog open={dialog==="employee"} onClose={()=>setDialog(null)} language={language} functions={functions} exams={exams} companyId={profile?.company_id??companies.find(c=>c.status==="approved")?.id??null} onSaved={async()=>{setDialog(null);setNotice("Funcionário cadastrado.");await load()}}/>
     <FunctionDialog open={dialog==="function"} onClose={()=>setDialog(null)} language={language} exams={exams} companyId={profile?.company_id??companies.find(c=>c.status==="approved")?.id??null} onSaved={async()=>{setDialog(null);setNotice(language==="pt"?"Função cadastrada.":"Function registered.");await load()}}/>
-    <ClinicDialog open={dialog==="location"} onClose={()=>setDialog(null)} language={language} companies={companies} onSaved={async()=>{setDialog(null);setNotice(language==="pt"?"Clínica cadastrada e agenda gerada.":"Clinic registered and schedule generated.");await load()}}/>\n    <ExamDialog open={dialog==="exam"} onClose={()=>setDialog(null)} onSaved={async()=>{setDialog(null);setNotice("Exame adicionado ao catálogo.");await load()}}/>
+    <ClinicDialog open={dialog==="location"} onClose={()=>setDialog(null)} language={language} companies={companies} onSaved={async()=>{setDialog(null);setNotice(language==="pt"?"Clínica cadastrada e agenda gerada.":"Clinic registered and schedule generated.");await load()}}/>
+    <ExamDialog open={dialog==="exam"} onClose={()=>setDialog(null)} onSaved={async()=>{setDialog(null);setNotice("Exame adicionado ao catálogo.");await load()}}/>
     <AppointmentDialog open={dialog==="appointment"} onClose={()=>setDialog(null)} employees={employees} exams={exams} profile={profile} companies={companies} isMaster={isMaster} onSaved={async()=>{setDialog(null);setNotice("Agendamento criado.");await load()}}/>
     <JoinDialog open={dialog==="join"} onClose={()=>setDialog(null)} onSaved={async()=>{setDialog(null);setNotice("Empresa vinculada com sucesso.");await load()}}/>
   </div>;
