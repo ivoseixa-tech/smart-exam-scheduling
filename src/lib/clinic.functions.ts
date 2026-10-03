@@ -31,8 +31,8 @@ export const listClinics = createServerFn({ method: "GET" })
     });
     if (roleError || !isMaster) throw new Error("Acesso permitido somente ao usuário mestre.");
 
-    const databaseUrl = process.env.DATABASE_URL;
-    if (!databaseUrl) throw new Error("DATABASE_URL não configurada para o banco PostgreSQL externo.");
+    const databaseUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
+    if (!databaseUrl) throw new Error("Conexão PostgreSQL do Neon não configurada no ambiente do servidor.");
     const sql = neon(databaseUrl);
 
     const clinics = await sql`
@@ -84,8 +84,8 @@ export const createClinicWithSchedule = createServerFn({ method: "POST" })
     });
     if (roleError || !isMaster) throw new Error("Acesso permitido somente ao usuário mestre.");
 
-    const databaseUrl = process.env.DATABASE_URL;
-    if (!databaseUrl) throw new Error("DATABASE_URL não configurada para o banco PostgreSQL externo.");
+    const databaseUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
+    if (!databaseUrl) throw new Error("Conexão PostgreSQL do Neon não configurada no ambiente do servidor.");
     const sql = neon(databaseUrl);
 
     const duplicate = await sql`
