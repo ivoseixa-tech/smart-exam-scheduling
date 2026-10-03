@@ -54,7 +54,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 const CLINIC_API_URL = "https://br-royal-forest-b469fwmo-clinicapi.compute.c-6.us-east-2.aws.neon.tech/";
 
-async function callClinicApi(action: "list" | "create", data?: unknown) {
+async function callClinicApi(action: "list" | "create" | "update" | "delete", data?: unknown, clinicId?: string) {
   const request = getRequest();
   const authorization = request?.headers?.get("authorization");
 
@@ -77,7 +77,7 @@ async function callClinicApi(action: "list" | "create", data?: unknown) {
       "X-Supabase-URL": supabaseUrl,
       "X-Supabase-Publishable-Key": supabasePublishableKey,
     },
-    body: JSON.stringify({ action, data }),
+    body: JSON.stringify({ action, data, clinicId }),
   });
 
   const bodyText = await response.text();
@@ -105,6 +105,41 @@ export const listClinics = createServerFn({ method: "GET" })
       const message = getErrorMessage(error, "Falha ao consultar as clínicas.");
       console.error("[Clinic:listClinics]", message);
       throw new Error("Não foi possível carregar as clínicas: " + message);
+    }
+  });
+
+export const updateClinicWithSchedule = createServerFn({ method: "POST" })
+  .inputValidator((input) => z.object({
+    clinicId: z.string().uuid(),
+    data: clinicInput,
+  }).parse(input))
+  .handler(async ({ data }) => {
+    try {
+      const result = await callClinicApi("update", data.data, data.clinicId) as { ok?: boolean; clinicId?: string; slotCount?: number } | null;
+      if (!result?.ok || typeof result.clinicId !== "string") {
+        throw new Error("Não foi possível atualizar a clínica.");
+      }
+      return { ok: true, clinicId: result.clinicId, slotCount: Number(result.slotCount ?? 0) };
+    } catch (error) {
+      const message = getErrorMessage(error, "Falha ao atualizar a clínica.");
+      console.error("[Clinic:updateClinicWithSchedule]", message);
+      throw new Error("Não foi possível atualizar a clínica: " + message);
+    }
+  });
+
+export const deleteClinic = createServerFn({ method: "POST" })
+  .inputValidator((input) => z.object({ clinicId: z.string().uuid() }).parse(input))
+  .handler(async ({ data }) => {
+    try {
+      const result = await callClinicApi("delete", undefined, data.clinicId) as { ok?: boolean; clinicId?: string } | null;
+      if (!result?.ok || typeof result.clinicId !== "string") {
+        throw new Error("Não foi possível excluir a clínica.");
+      }
+      return { ok: true, clinicId: result.clinicId };
+    } catch (error) {
+      const message = getErrorMessage(error, "Falha ao excluir a clínica.");
+      console.error("[Clinic:deleteClinic]", message);
+      throw new Error("Não foi possível excluir a clínica: " + message);
     }
   });
 
