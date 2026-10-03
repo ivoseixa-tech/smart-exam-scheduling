@@ -114,6 +114,37 @@ async function authenticateClinicRequest(): Promise<ClinicAuth> {
   };
 }
 
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === "object" && error !== null) {
+    const candidate = error as {
+      message?: unknown;
+      detail?: unknown;
+      hint?: unknown;
+      code?: unknown;
+    };
+
+    const message = typeof candidate.message === "string" ? candidate.message : "";
+    const detail = typeof candidate.detail === "string" ? candidate.detail : "";
+    const hint = typeof candidate.hint === "string" ? candidate.hint : "";
+    const code = typeof candidate.code === "string" ? candidate.code : "";
+
+    const parts = [message, detail, hint, code ? `[SQLSTATE ${code}]` : ""].filter(Boolean);
+    if (parts.length > 0) {
+      return parts.join(" — ");
+    }
+  }
+
+  if (typeof error === "string" && error.trim()) {
+    return error;
+  }
+
+  return fallback;
+}
+
 function getClinicPool() {
   const databaseUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
 
@@ -147,7 +178,7 @@ export const listClinics = createServerFn({ method: "GET" })
       }
       return JSON.parse(JSON.stringify(data)) as unknown[];
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Falha ao consultar as clínicas.";
+      const message = getErrorMessage(error, "Falha ao consultar as clínicas.");
       console.error("[Clinic:listClinics]", message);
       throw new Error("Não foi possível carregar as clínicas: " + message);
     } finally {
@@ -178,7 +209,7 @@ export const createClinicWithSchedule = createServerFn({ method: "POST" })
         slotCount: Number(result.slotCount ?? 0),
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Falha ao cadastrar a clínica.";
+      const message = getErrorMessage(error, "Falha ao cadastrar a clínica.");
       console.error("[Clinic:createClinicWithSchedule]", message);
       throw new Error("Não foi possível cadastrar a clínica: " + message);
     } finally {
