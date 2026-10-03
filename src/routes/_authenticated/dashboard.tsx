@@ -5,7 +5,7 @@ import { Activity, Bell, Building2, CalendarDays, Check, ChevronRight, Clipboard
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
 import { lookupCnpj } from "@/lib/cnpj.functions";
-import { createCompanyAgendaUser } from "@/lib/admin-users.functions";
+import { createClinicWithSchedule, createCompanyAgendaUser } from "@/lib/admin-users.functions";
 import { UserManagement } from "@/components/UserManagement";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -175,6 +175,7 @@ function ClinicDialog({open,onClose,onSaved,companies,language}:{open:boolean;on
   const [error,setError]=useState("");
   const [selectedCompanies,setSelectedCompanies]=useState<string[]>([]);
   const [schedule,setSchedule]=useState(days.map((_,weekday)=>({weekday,enabled:weekday>=1&&weekday<=5,start_time:"08:00",end_time:"17:00",slot_minutes:30})));
+  const runCreateClinic=useServerFn(createClinicWithSchedule);
   useEffect(()=>{if(open){setError("");setSelectedCompanies([]);setSchedule(days.map((_,weekday)=>({weekday,enabled:weekday>=1&&weekday<=5,start_time:"08:00",end_time:"17:00",slot_minutes:30})));}},[open,language]);
   function toggleCompany(id:string){setSelectedCompanies(current=>current.includes(id)?current.filter(x=>x!==id):[...current,id]);}
   function updateDay(weekday:number,key:"enabled"|"start_time"|"end_time"|"slot_minutes",value:boolean|string|number){setSchedule(current=>current.map(day=>day.weekday===weekday?{...day,[key]:value}:day));}
@@ -190,8 +191,7 @@ function ClinicDialog({open,onClose,onSaved,companies,language}:{open:boolean;on
       state:String(f.get("state")).trim().toUpperCase(),postal_code:String(f.get("postal_code")).replace(/\\D/g,""),phone:String(f.get("phone")).trim(),
       company_ids:selectedCompanies,schedule:active.map(day=>({weekday:day.weekday,start_time:day.start_time,end_time:day.end_time,slot_minutes:Number(day.slot_minutes)}))
     };
-    const {error:saveError}=await supabase.rpc("create_clinic_with_schedule",{_data:data});
-    if(saveError){setError(saveError.message);return;} onSaved();
+    try { await runCreateClinic({ data }); onSaved(); } catch (saveError) { setError(saveError instanceof Error ? saveError.message : "Não foi possível cadastrar a clínica."); }
   }
   const approved=companies.filter(c=>c.status==="approved");
   return <DialogFrame open={open} onClose={onClose} onSubmit={submit} title={language==="pt"?"Cadastrar clínica de atendimento":"Register service clinic"} description={language==="pt"?"Cadastre endereço, empresas habilitadas e agenda semanal. Os horários serão gerados automaticamente.":"Register the address, enabled companies and weekly schedule. Time slots will be generated automatically."}>
