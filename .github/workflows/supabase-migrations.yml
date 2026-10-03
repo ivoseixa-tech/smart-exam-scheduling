@@ -32,14 +32,23 @@ jobs:
         with:
           version: latest
 
-      - name: Validate required secrets
+      - name: Validate Supabase credentials
         shell: bash
         run: |
-          test -n "$SUPABASE_ACCESS_TOKEN" || (echo "SUPABASE_ACCESS_TOKEN is not configured in GitHub Secrets" && exit 1)
-          test -n "$SUPABASE_DB_PASSWORD" || (echo "SUPABASE_DB_PASSWORD is not configured in GitHub Secrets" && exit 1)
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "::error::SUPABASE_ACCESS_TOKEN não está disponível para este workflow."
+            exit 1
+          fi
+          if [ -z "$SUPABASE_DB_PASSWORD" ]; then
+            echo "::error::SUPABASE_DB_PASSWORD não está disponível para este workflow."
+            exit 1
+          fi
 
       - name: Link Supabase project
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+
+      - name: Check migration status
+        run: supabase migration list
 
       - name: Preview migrations
         run: supabase db push --dry-run
