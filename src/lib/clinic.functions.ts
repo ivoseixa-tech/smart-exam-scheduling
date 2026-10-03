@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import { neon } from "@neondatabase/serverless";
 import { z } from "zod";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const clinicInput = z.object({
   name: z.string().trim().min(2).max(160),
@@ -22,6 +22,98 @@ const clinicInput = z.object({
   })).min(1),
 });
 
+type ClinicAuth = {
+  userId: string;
+  role?: string;
+  email?: string;
+};
+
+function getSupabaseServerConfig() {
+  const url = process.env["SUPABASE_URL"];
+  const key = process.env["SUPABASE_PUBLISHABLE_KEY"];
+
+  if (!url || !key) {
+    throw new Error("Configuração do Supabase não disponível no ambiente do servidor.");
+  }
+
+  return { url: url.replace(/\/$/, ""), key };
+}
+
+async function authenticateClinicRequest(): Promise<ClinicAuth> {
+  const request = getRequest();
+  const authHeader = request?.headers?.get("authorization");
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new Error("Não autenticado.");
+  }
+
+  const token = authHeader.slice("Bearer ".length).trim();
+  if (!token || token.split(".").length !== 3) {
+    throw new Error("Sessão inválida.");
+  }
+
+  const { url, key } = getSupabaseServerConfig();
+
+  // Validate the session directly with Supabase Auth.
+  // The clinic module intentionally does not use the Supabase JS auth verifier,
+  // avoiding any local JWKS/JWK lookup in this server function.
+  const authResponse = await fetch(`${url}/auth/v1/user`, {
+    method: "GET",
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!authResponse.ok) {
+    throw new Error("Sessão inválida ou expirada.");
+  }
+
+  const authData = await authResponse.json() as {
+    id?: string;
+    role?: string;
+    email?: string;
+    user?: { id?: string; role?: string; email?: string };
+  };
+
+  const user = authData.user ?? authData;
+  if (!user.id) {
+    throw new Error("Usuário autenticado não identificado.");
+  }
+
+  // Check the existing master role through Supabase REST instead of the
+  // Supabase JS client. This keeps the clinic flow outside the SDK/JWKS path.
+  const roleResponse = await fetch(`${url}/rest/v1/rpc/has_role`, {
+    method: "POST",
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      _user_id: user.id,
+      _role: "master",
+    }),
+  });
+
+  if (!roleResponse.ok) {
+    throw new Error("Não foi possível validar a permissão do usuário.");
+  }
+
+  const roleData = await roleResponse.json();
+  const isMaster = roleData === true || roleData?.data === true || roleData?.result === true;
+
+  if (!isMaster) {
+    throw new Error("Acesso permitido somente ao usuário mestre.");
+  }
+
+  return {
+    userId: user.id,
+    role: user.role,
+    email: user.email,
+  };
+}
+
 function getClinicSql() {
   const databaseUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
 
@@ -39,16 +131,8 @@ function getClinicSql() {
 }
 
 export const listClinics = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data: isMaster, error: roleError } = await context.supabase.rpc("has_role", {
-      _user_id: context.userId,
-      _role: "master",
-    });
-
-    if (roleError || !isMaster) {
-      throw new Error("Acesso permitido somente ao usuário mestre.");
-    }
+  .handler(async () => {
+    await authenticateClinicRequest();
 
     const sql = getClinicSql();
     const rows = await sql`SELECT public.list_clinics() AS data`;
@@ -56,23 +140,15 @@ export const listClinics = createServerFn({ method: "GET" })
   });
 
 export const createClinicWithSchedule = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .inputValidator((input) => clinicInput.parse(input))
-  .handler(async ({ data, context }) => {
-    const { data: isMaster, error: roleError } = await context.supabase.rpc("has_role", {
-      _user_id: context.userId,
-      _role: "master",
-    });
-
-    if (roleError || !isMaster) {
-      throw new Error("Acesso permitido somente ao usuário mestre.");
-    }
+  .handler(async ({ data }) => {
+    const auth = await authenticateClinicRequest();
 
     const sql = getClinicSql();
     const rows = await sql`
       SELECT public.create_clinic_with_schedule(
         ${JSON.stringify(data)}::jsonb,
-        ${context.userId}::uuid
+        ${auth.userId}::uuid
       ) AS data
     `;
 
