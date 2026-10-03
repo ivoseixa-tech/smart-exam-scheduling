@@ -58,3 +58,44 @@ export const setManagedUserApproval = createServerFn({ method: "POST" })
     if (error) throw new Error("Não foi possível alterar a aprovação deste usuário.");
     return { ok: true };
   });
+
+export const createCompanyAgendaUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({
+    companyId: z.string().uuid(),
+    fullName: z.string().trim().min(2).max(120),
+    password: z.string().min(8).max(72),
+  }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: isMaster, error: roleError } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "master" });
+    if (roleError || !isMaster) throw new Error("Acesso permitido somente ao usuário mestre.");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: company, error: companyError } = await supabaseAdmin.from("companies").select("id,status").eq("id", data.companyId).maybeSingle();
+    if (companyError || !company) throw new Error("Empresa não encontrada.");
+    if (company.status !== "approved") throw new Error("A empresa precisa estar aprovada para receber acesso à agenda.");
+
+    const loginCode = `AGENDA-${crypto.randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
+    const authEmail = `${loginCode.toLowerCase()}@login.medagenda.local`;
+    const { data: created, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email: authEmail,
+      password: data.password,
+      email_confirm: true,
+      user_metadata: { full_name: data.fullName, login_code: loginCode, access_type: "company_agenda" },
+    });
+    if (authError || !created.user) throw new Error(authError?.message ?? "Não foi possível criar o usuário da empresa.");
+
+    try {
+      const { error: profileError } = await supabaseAdmin.from("profiles").insert({
+        id: created.user.id, company_id: data.companyId, full_name: data.fullName,
+        preferred_language: "pt", is_active: true, agenda_login_code: loginCode,
+      });
+      if (profileError) throw profileError;
+      const { error: roleError2 } = await supabaseAdmin.from("user_roles").insert({ user_id: created.user.id, role: "company_user" });
+      if (roleError2) throw roleError2;
+    } catch (error) {
+      await supabaseAdmin.auth.admin.deleteUser(created.user.id);
+      throw new Error(error instanceof Error ? error.message : "Não foi possível concluir o cadastro do acesso.");
+    }
+    return { ok: true, loginCode };
+  });
