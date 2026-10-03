@@ -3,7 +3,7 @@ import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-const CLINIC_API_URL = "https://br-royal-forest-b469fwmo-clinicapi.compute.c-6.us-east-2.aws.neon.tech";
+const CLINIC_API_URL = "https://ep-frosty-haze-b4w572k4.apirest.c-6.us-east-2.aws.neon.tech/neondb/rest/v1";
 
 const clinicInput = z.object({
   name: z.string().trim().min(2).max(160),
@@ -24,7 +24,7 @@ const clinicInput = z.object({
   })).min(1),
 });
 
-async function callClinicApi(path: string, init?: RequestInit) {
+async function callClinicApi(path: string, body: unknown) {
   const request = getRequest();
   const authorization = request?.headers.get("authorization");
 
@@ -33,35 +33,54 @@ async function callClinicApi(path: string, init?: RequestInit) {
   }
 
   const response = await fetch(`${CLINIC_API_URL}${path}`, {
-    ...init,
+    method: "POST",
     headers: {
-      ...(init?.headers ?? {}),
       Authorization: authorization,
       "Content-Type": "application/json",
+      Accept: "application/json",
     },
+    body: JSON.stringify(body),
   });
 
-  const body = await response.json().catch(() => ({ error: "Resposta inválida do serviço de clínicas." }));
-
-  if (!response.ok) {
-    throw new Error(body?.error || `Erro no serviço de clínicas (HTTP ${response.status}).`);
+  const raw = await response.text();
+  let data: unknown = null;
+  try {
+    data = raw ? JSON.parse(raw) : null;
+  } catch {
+    throw new Error("Resposta inválida do serviço de clínicas.");
   }
 
-  return body;
+  if (!response.ok) {
+    const message =
+      typeof data === "object" &&
+      data !== null &&
+      "message" in data &&
+      typeof data.message === "string"
+        ? data.message
+        : typeof data === "object" &&
+          data !== null &&
+          "error" in data &&
+          typeof data.error === "string"
+        ? data.error
+        : `Erro no serviço de clínicas (HTTP ${response.status}).`;
+    throw new Error(message);
+  }
+
+  return data;
 }
 
 export const listClinics = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
-    return callClinicApi("/clinics");
+    return callClinicApi("/rpc/list_clinics", {});
   });
 
 export const createClinicWithSchedule = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => clinicInput.parse(input))
-  .handler(async ({ data }) => {
-    return callClinicApi("/clinics", {
-      method: "POST",
-      body: JSON.stringify(data),
+  .handler(async ({ data, context }) => {
+    return callClinicApi("/rpc/create_clinic_with_schedule", {
+      p_data: data,
+      p_user_id: context.userId,
     });
   });
