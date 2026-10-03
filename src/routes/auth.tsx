@@ -26,12 +26,12 @@ function AuthPage() {
   const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false);
   const copy = language === "pt" ? {
     title: "Saúde ocupacional, organizada.", subtitle: "Empresas, funcionários, exames e agenda em um único ambiente seguro.",
-    signIn: "Entrar", signUp: "Criar acesso", email: "E-mail", password: "Senha", name: "Nome completo",
+    signIn: "Entrar", signUp: "Criar acesso", email: "E-mail ou código de login", password: "Senha", name: "Nome completo",
     new: "Primeiro acesso?", existing: "Já possui acesso?", google: "Continuar com Google", submitIn: "Acessar sistema", submitUp: "Criar minha conta",
     feature1: "Dados separados por empresa", feature2: "Agenda e exames integrados", feature3: "Acesso aprovado pelo usuário mestre", pending: "Cadastro recebido. Aguarde a aprovação do usuário mestre para acessar o sistema.",
   } : {
     title: "Occupational health, organized.", subtitle: "Companies, employees, exams and schedules in one secure workspace.",
-    signIn: "Sign in", signUp: "Create access", email: "Email", password: "Password", name: "Full name",
+    signIn: "Sign in", signUp: "Create access", email: "Email or login code", password: "Password", name: "Full name",
     new: "First access?", existing: "Already registered?", google: "Continue with Google", submitIn: "Open system", submitUp: "Create my account",
     feature1: "Company-isolated data", feature2: "Integrated schedule and exams", feature3: "Access approved by the master user", pending: "Registration received. Wait for the master user to approve your access.",
   };
@@ -39,7 +39,7 @@ function AuthPage() {
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setMessage("");
     if (mode === "signin") {
-      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      const loginIdentifier = email.trim(); const authEmail = loginIdentifier.includes("@") ? loginIdentifier : `${loginIdentifier.toLowerCase()}@login.medagenda.local`; const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password });
       if (error) setMessage(error.message);
       else {
         const { data: userData } = await supabase.auth.getUser();
