@@ -141,7 +141,15 @@ export const listClinics = createServerFn({ method: "GET" })
     const pool = getClinicPool();
     try {
       const { rows } = await pool.query("SELECT public.list_clinics() AS data");
-      return rows[0]?.data ?? [];
+      const data = rows[0]?.data;
+      if (!Array.isArray(data)) {
+        return [];
+      }
+      return JSON.parse(JSON.stringify(data)) as unknown[];
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao consultar as clínicas.";
+      console.error("[Clinic:listClinics]", message);
+      throw new Error("Não foi possível carregar as clínicas: " + message);
     } finally {
       await pool.end();
     }
@@ -159,12 +167,20 @@ export const createClinicWithSchedule = createServerFn({ method: "POST" })
         [JSON.stringify(data), auth.userId],
       );
 
-      const result = rows[0]?.data;
-      if (!result || result.ok !== true) {
+      const result = rows[0]?.data as { ok?: boolean; clinicId?: string; slotCount?: number } | null;
+      if (!result?.ok || typeof result.clinicId !== "string") {
         throw new Error("Não foi possível concluir o cadastro da clínica.");
       }
 
-      return result;
+      return {
+        ok: true,
+        clinicId: result.clinicId,
+        slotCount: Number(result.slotCount ?? 0),
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao cadastrar a clínica.";
+      console.error("[Clinic:createClinicWithSchedule]", message);
+      throw new Error("Não foi possível cadastrar a clínica: " + message);
     } finally {
       await pool.end();
     }
