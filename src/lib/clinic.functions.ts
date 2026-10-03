@@ -1,7 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
-import { neon } from "@neondatabase/serverless";
+import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+
+const CLINIC_API_URL = "https://br-royal-forest-b469fwmo-clinicapi.compute.c-6.us-east-2.aws.neon.tech";
 
 const clinicInput = z.object({
   name: z.string().trim().min(2).max(160),
@@ -22,146 +24,44 @@ const clinicInput = z.object({
   })).min(1),
 });
 
+async function callClinicApi(path: string, init?: RequestInit) {
+  const request = getRequest();
+  const authorization = request?.headers.get("authorization");
+
+  if (!authorization?.startsWith("Bearer ")) {
+    throw new Error("Sessão de usuário não encontrada.");
+  }
+
+  const response = await fetch(`${CLINIC_API_URL}${path}`, {
+    ...init,
+    headers: {
+      ...(init?.headers ?? {}),
+      Authorization: authorization,
+      "Content-Type": "application/json",
+    },
+  });
+
+  const body = await response.json().catch(() => ({ error: "Resposta inválida do serviço de clínicas." }));
+
+  if (!response.ok) {
+    throw new Error(body?.error || `Erro no serviço de clínicas (HTTP ${response.status}).`);
+  }
+
+  return body;
+}
+
 export const listClinics = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data: isMaster, error: roleError } = await context.supabase.rpc("has_role", {
-      _user_id: context.userId,
-      _role: "master",
-    });
-    if (roleError || !isMaster) throw new Error("Acesso permitido somente ao usuário mestre.");
-
-    const databaseUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
-    if (!databaseUrl) throw new Error("Conexão PostgreSQL do Neon não configurada no ambiente do servidor.");
-    const sql = neon(databaseUrl);
-
-    const clinics = await sql`
-      SELECT
-        c.id,
-        c.name,
-        c.street,
-        c.number,
-        c.complement,
-        c.district,
-        c.city,
-        c.state,
-        c.postal_code,
-        c.phone,
-        c.is_active,
-        c.created_at,
-        COALESCE((
-          SELECT json_agg(json_build_object('location_id', cc.clinic_id, 'company_id', cc.company_id) ORDER BY cc.company_id)
-          FROM public.clinic_companies cc
-          WHERE cc.clinic_id = c.id
-        ), '[]'::json) AS companies,
-        COALESCE((
-          SELECT json_agg(json_build_object(
-            'id', sr.id,
-            'location_id', sr.clinic_id,
-            'weekday', sr.weekday,
-            'start_time', sr.start_time,
-            'end_time', sr.end_time,
-            'slot_minutes', sr.slot_minutes,
-            'is_active', sr.is_active
-          ) ORDER BY sr.weekday, sr.start_time)
-          FROM public.clinic_schedule_rules sr
-          WHERE sr.clinic_id = c.id AND sr.is_active = true
-        ), '[]'::json) AS schedule_rules
-      FROM public.clinics c
-      ORDER BY c.name
-    `;
-
-    return clinics;
+  .handler(async () => {
+    return callClinicApi("/clinics");
   });
 
 export const createClinicWithSchedule = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => clinicInput.parse(input))
-  .handler(async ({ data, context }) => {
-    const { data: isMaster, error: roleError } = await context.supabase.rpc("has_role", {
-      _user_id: context.userId,
-      _role: "master",
+  .handler(async ({ data }) => {
+    return callClinicApi("/clinics", {
+      method: "POST",
+      body: JSON.stringify(data),
     });
-    if (roleError || !isMaster) throw new Error("Acesso permitido somente ao usuário mestre.");
-
-    const databaseUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
-    if (!databaseUrl) throw new Error("Conexão PostgreSQL do Neon não configurada no ambiente do servidor.");
-    const sql = neon(databaseUrl);
-
-    const duplicate = await sql`
-      SELECT id FROM public.clinics
-      WHERE lower(name) = lower(${data.name})
-        AND lower(city) = lower(${data.city})
-        AND state = ${data.state.toUpperCase()}
-      LIMIT 1
-    `;
-    if (duplicate.length) throw new Error("Já existe uma clínica com este nome nesta cidade.");
-
-    for (const rule of data.schedule) {
-      if (rule.start_time >= rule.end_time) {
-        throw new Error("O horário inicial deve ser menor que o horário final.");
-      }
-    }
-
-    const clinicRows = await sql`
-      INSERT INTO public.clinics
-        (name, street, number, complement, district, city, state, postal_code, phone, created_by)
-      VALUES
-        (${data.name}, ${data.street}, ${data.number || null}, ${data.complement || null},
-         ${data.district || null}, ${data.city}, ${data.state.toUpperCase()},
-         ${data.postal_code || null}, ${data.phone || null}, ${context.userId})
-      RETURNING id
-    `;
-    const clinicId = String(clinicRows[0].id);
-
-    try {
-      for (const companyId of data.company_ids) {
-        await sql`
-          INSERT INTO public.clinic_companies (clinic_id, company_id)
-          VALUES (${clinicId}::uuid, ${companyId}::uuid)
-          ON CONFLICT DO NOTHING
-        `;
-      }
-
-      for (const rule of data.schedule) {
-        await sql`
-          INSERT INTO public.clinic_schedule_rules
-            (clinic_id, weekday, start_time, end_time, slot_minutes)
-          VALUES
-            (${clinicId}::uuid, ${rule.weekday}, ${rule.start_time}::time,
-             ${rule.end_time}::time, ${rule.slot_minutes})
-        `;
-      }
-    } catch (error) {
-      await sql`DELETE FROM public.clinics WHERE id = ${clinicId}::uuid`;
-      throw error;
-    }
-
-    let slotCount = 0;
-    const startDate = new Date();
-    startDate.setHours(0, 0, 0, 0);
-    for (let offset = 0; offset < 180; offset += 1) {
-      const day = new Date(startDate);
-      day.setDate(startDate.getDate() + offset);
-      const weekday = day.getDay();
-      for (const rule of data.schedule.filter((item) => item.weekday === weekday)) {
-        const [startHour, startMinute] = rule.start_time.split(":").map(Number);
-        const [endHour, endMinute] = rule.end_time.split(":").map(Number);
-        const start = startHour * 60 + startMinute;
-        const end = endHour * 60 + endMinute;
-        for (let minute = start; minute + rule.slot_minutes <= end; minute += rule.slot_minutes) {
-          const startsAt = new Date(day);
-          startsAt.setHours(Math.floor(minute / 60), minute % 60, 0, 0);
-          const endsAt = new Date(startsAt.getTime() + rule.slot_minutes * 60_000);
-          await sql`
-            INSERT INTO public.clinic_slots (clinic_id, starts_at, ends_at)
-            VALUES (${clinicId}::uuid, ${startsAt.toISOString()}::timestamptz, ${endsAt.toISOString()}::timestamptz)
-            ON CONFLICT (clinic_id, starts_at) DO NOTHING
-          `;
-          slotCount += 1;
-        }
-      }
-    }
-
-    return { ok: true, clinicId, slotCount };
   });
