@@ -22,34 +22,24 @@ const clinicInput = z.object({
 });
 
 function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
+  // Never expose database internals to the browser.
+  const raw = error instanceof Error
+    ? error.message
+    : typeof error === "string"
+      ? error
+      : typeof error === "object" && error !== null && typeof (error as { message?: unknown }).message === "string"
+        ? (error as { message: string }).message
+        : "";
 
-  if (typeof error === "object" && error !== null) {
-    const candidate = error as {
-      message?: unknown;
-      detail?: unknown;
-      hint?: unknown;
-      code?: unknown;
-    };
+  if (!raw.trim()) return fallback;
 
-    const message = typeof candidate.message === "string" ? candidate.message : "";
-    const detail = typeof candidate.detail === "string" ? candidate.detail : "";
-    const hint = typeof candidate.hint === "string" ? candidate.hint : "";
-    const code = typeof candidate.code === "string" ? candidate.code : "";
+  const safe = raw
+    .replace(/\s*—\s*\[SQLSTATE\s+[A-Z0-9]+\]/gi, "")
+    .replace(/\b(?:SQLSTATE|DETAIL|HINT|CONTEXT|internal query|constraint)\s*:?[^\n]*/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 
-    const parts = [message, detail, hint, code ? `[SQLSTATE ${code}]` : ""].filter(Boolean);
-    if (parts.length > 0) {
-      return parts.join(" — ");
-    }
-  }
-
-  if (typeof error === "string" && error.trim()) {
-    return error;
-  }
-
-  return fallback;
+  return safe || fallback;
 }
 
 const CLINIC_API_URL = "https://br-royal-forest-b469fwmo-clinicapi.compute.c-6.us-east-2.aws.neon.tech/";
