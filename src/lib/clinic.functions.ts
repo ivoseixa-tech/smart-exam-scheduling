@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
-import { neon, neonConfig } from "@neondatabase/serverless";
 import { z } from "zod";
 
 const clinicInput = z.object({
@@ -145,34 +144,87 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-function getClinicSql() {
+type NeonHttpResult<T = Record<string, unknown>> = {
+  rows?: T[];
+  results?: Array<{ rows?: T[] }>;
+};
+
+function getNeonHttpConfig() {
   const databaseUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
 
   if (!databaseUrl) {
     throw new Error("Conexão PostgreSQL do Neon não configurada no ambiente do servidor.");
   }
 
+  let parsed: URL;
   try {
-    new URL(databaseUrl);
+    parsed = new URL(databaseUrl);
   } catch {
     throw new Error("DATABASE_URL/NEON_DATABASE_URL precisa ser a URL completa de conexão do PostgreSQL do Neon.");
   }
 
-  // Force the one-shot Neon driver onto its HTTP /sql transport.
-  // This prevents any WebSocket handshake from being attempted in the
-  // Lovable/Cloudflare server runtime, where the Neon WS endpoint can return 403.
-  neonConfig.fetchEndpoint = (host) => `https://${host}/sql`;
+  if (!["postgres:", "postgresql:"].includes(parsed.protocol) || !parsed.hostname) {
+    throw new Error("DATABASE_URL/NEON_DATABASE_URL não é uma conexão PostgreSQL válida.");
+  }
 
-  return neon(databaseUrl);
+  return {
+    endpoint: `https://${parsed.hostname}/sql`,
+    connectionString: databaseUrl,
+  };
+}
+
+async function queryNeonHttp<T = Record<string, unknown>>(
+  query: string,
+  params: unknown[] = [],
+): Promise<T[]> {
+  const { endpoint, connectionString } = getNeonHttpConfig();
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Neon-Connection-String": connectionString,
+    },
+    body: JSON.stringify({ query, params }),
+  });
+
+  const bodyText = await response.text();
+  let body: NeonHttpResult<T> | { message?: string; error?: string };
+
+  try {
+    body = JSON.parse(bodyText) as typeof body;
+  } catch {
+    body = { message: bodyText || "Resposta inválida do Neon." };
+  }
+
+  if (!response.ok) {
+    const message =
+      "message" in body && typeof body.message === "string"
+        ? body.message
+        : "error" in body && typeof body.error === "string"
+          ? body.error
+          : `Neon HTTP respondeu com status ${response.status}.`;
+
+    throw new Error(message);
+  }
+
+  if ("rows" in body && Array.isArray(body.rows)) {
+    return body.rows;
+  }
+
+  if ("results" in body && Array.isArray(body.results)) {
+    return body.results.flatMap((result) => Array.isArray(result.rows) ? result.rows : []);
+  }
+
+  return [];
 }
 
 export const listClinics = createServerFn({ method: "GET" })
   .handler(async () => {
     await authenticateClinicRequest();
 
-    const sql = getClinicSql();
     try {
-      const rows = await sql`SELECT public.list_clinics() AS data`;
+      const rows = await queryNeonHttp<{ data: unknown }>("SELECT public.list_clinics() AS data");
       const data = rows[0]?.data;
       if (!Array.isArray(data)) {
         return [];
@@ -190,14 +242,11 @@ export const createClinicWithSchedule = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const auth = await authenticateClinicRequest();
 
-    const sql = getClinicSql();
     try {
-      const rows = await sql`
-        SELECT public.create_clinic_with_schedule(
-          ${JSON.stringify(data)}::jsonb,
-          ${auth.userId}::uuid
-        ) AS data
-      `;
+      const rows = await queryNeonHttp<{ data: unknown }>(
+        "SELECT public.create_clinic_with_schedule($1::jsonb, $2::uuid) AS data",
+        [JSON.stringify(data), auth.userId],
+      );
 
       const result = rows[0]?.data as { ok?: boolean; clinicId?: string; slotCount?: number } | null;
       if (!result?.ok || typeof result.clinicId !== "string") {
