@@ -1,14 +1,18 @@
-# Welcome to your Lovable project
+# Agendamento Fácil
+
+criar um microsaas de agendamento de exames, terá uma pagina de acesso mestre geral com login e senha e senha de acesso para empresas/usuários. no sistema terá uma área de cadastro de empresas "deverá ser validada pelo cnpj puxado da receita federal" puxando todas as informações do cartão, área de cadastro de funcionários deverá ter" nome completo, cpf, rg, naturalidade, nacionalidade, data de nascimento, sexo, função admissão,posto de trabalho, área de cadastro de exames clínicos ocupacionais, inserir todos os exames ocupacionais, área de cadastro de exames complementares, criar o language select  en/ pt no sistema para evitar erros.
 
 This project was built with [Lovable](https://lovable.dev).
 
+**Live app**: https://smart-exam-scheduling.lovable.app
+
 ## Build with Lovable
 
-Open your project in the [Lovable editor](https://lovable.dev) and keep building.
+Continue developing this project in the [Lovable editor](https://lovable.dev/projects/b9452e2e-15e7-4aa1-a9ff-5ade65c64007).
 
 - **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
-- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
+- **Stay in sync**: every change made in Lovable is committed straight to this repository.
+- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
 
 ## Development
 
@@ -20,10 +24,3 @@ cd <repository-name>
 npm i
 npm run dev
 ```
-
-## Built with
-
-- TanStack Start
-- TypeScript
-- React
-- Tailwind CSS
