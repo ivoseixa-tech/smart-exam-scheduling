@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Activity, Building2, CalendarDays, Check, ChevronRight, ClipboardPlus, Clock3, FileCheck2, LayoutDashboard, Menu, Plus, Search, Stethoscope, UserRound, UsersRound, X } from "lucide-react";
+import { Activity, Bell, Building2, CalendarDays, Check, ChevronRight, ClipboardPlus, Clock3, Download, FileCheck2, LayoutDashboard, MapPin, Menu, Plus, Search, Stethoscope, UserRound, UsersRound, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
 import { lookupCnpj } from "@/lib/cnpj.functions";
@@ -13,13 +13,19 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { downloadAppointmentGuide } from "@/lib/appointment-guide";
 
-type Section = "dashboard" | "companies" | "employees" | "exams" | "schedule" | "users";
-type Company = { id:string; cnpj:string; legal_name:string; trade_name:string|null; status:"pending"|"approved"|"rejected"|"inactive"; city:string|null; state:string|null; registration_status:string|null; created_at:string };
-type Employee = { id:string; company_id:string; full_name:string; cpf:string; rg:string|null; birthplace:string; nationality:string; birth_date:string; sex:string; job_title:string; admission_date:string|null; workplace:string; is_active:boolean };
+type Section = "dashboard" | "companies" | "employees" | "exams" | "locations" | "schedule" | "users";
+type Company = { id:string; cnpj:string; legal_name:string; trade_name:string|null; status:"pending"|"approved"|"rejected"|"inactive"; street?:string|null; number?:string|null; district?:string|null; city:string|null; state:string|null; postal_code?:string|null; registration_status:string|null; created_at:string };
+type Employee = { id:string; company_id:string; full_name:string; cpf:string; rg:string|null; birthplace:string; nationality:string; birth_date:string; sex:string; job_title:string; occupational_function_id:string|null; admission_date:string|null; workplace:string; is_active:boolean };
 type Exam = { id:string; category:"clinical"|"complementary"; name_pt:string; name_en:string; duration_minutes:number; is_active:boolean };
-type Appointment = { id:string; company_id:string; employee_id:string; assessment_type:string; job_title:string|null; starts_at:string; ends_at:string; location:string; status:"scheduled"|"confirmed"|"completed"|"cancelled"; employees?: { full_name:string } | null };
+type Appointment = { id:string; company_id:string; employee_id:string; assessment_type:string; job_title:string|null; starts_at:string; ends_at:string; location:string; location_id:string|null; notes:string|null; status:"scheduled"|"confirmed"|"completed"|"cancelled"; employees?: { full_name:string; cpf:string } | null; appointment_exams?: { exams:{ name_pt:string; name_en:string }|null }[] };
 type Profile = { id:string; company_id:string|null; full_name:string; preferred_language:string; is_active:boolean };
+type OccupationalFunction = { id:string; company_id:string; name:string; is_active:boolean; occupational_function_exams?:{exam_id:string}[] };
+type ExamLocation = { id:string; name:string; street:string; number:string|null; complement:string|null; district:string|null; city:string; state:string; postal_code:string|null; phone:string|null; instructions_pt:string|null; instructions_en:string|null; is_active:boolean };
+type AvailabilitySlot = { id:string; location_id:string; starts_at:string; ends_at:string; is_active:boolean; exam_locations?:{name:string}|null };
+type Notification = { id:string; appointment_id:string|null; is_read:boolean; created_at:string };
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [
@@ -35,7 +41,9 @@ function DashboardPage() {
   const [section,setSection]=useState<Section>("dashboard"); const [mobile,setMobile]=useState(false); const [loading,setLoading]=useState(true);
   const [profile,setProfile]=useState<Profile|null>(null); const [isMaster,setIsMaster]=useState(false); const [companies,setCompanies]=useState<Company[]>([]);
   const [employees,setEmployees]=useState<Employee[]>([]); const [exams,setExams]=useState<Exam[]>([]); const [appointments,setAppointments]=useState<Appointment[]>([]);
-  const [dialog,setDialog]=useState<"company"|"employee"|"exam"|"appointment"|"join"|null>(null); const [query,setQuery]=useState(""); const [notice,setNotice]=useState("");
+  const [functions,setFunctions]=useState<OccupationalFunction[]>([]); const [locations,setLocations]=useState<ExamLocation[]>([]); const [slots,setSlots]=useState<AvailabilitySlot[]>([]); const [notifications,setNotifications]=useState<Notification[]>([]);
+  const [employeeExamIds,setEmployeeExamIds]=useState<Record<string,string[]>>({});
+  const [dialog,setDialog]=useState<"company"|"employee"|"exam"|"function"|"location"|"slot"|"appointment"|"join"|null>(null); const [query,setQuery]=useState(""); const [notice,setNotice]=useState("");
 
   async function load() {
     setLoading(true); const { data:userData }=await supabase.auth.getUser(); const user=userData.user; if(!user)return;
@@ -43,12 +51,15 @@ function DashboardPage() {
     if(!p){ await supabase.rpc("initialize_profile",{_full_name:String(user.user_metadata?.["full_name"] ?? user.email?.split("@")[0] ?? "Usuário"),_language:language}); const result=await supabase.from("profiles").select("id,company_id,full_name,preferred_language,is_active").eq("id",user.id).single(); p=result.data; }
     if(p){setProfile(p); if(p.preferred_language==="pt"||p.preferred_language==="en")setLanguage(p.preferred_language);}
     if(p&&!p.is_active){setLoading(false);return;}
-    const [{data:roles},{data:companyRows},{data:employeeRows},{data:examRows},{data:appointmentRows}]=await Promise.all([
+    const [{data:roles},{data:companyRows},{data:employeeRows},{data:examRows},{data:appointmentRows},{data:functionRows},{data:locationRows},{data:slotRows},{data:notificationRows},{data:employeeExamRows}]=await Promise.all([
       supabase.from("user_roles").select("role").eq("user_id",user.id), supabase.from("companies").select("id,cnpj,legal_name,trade_name,status,city,state,registration_status,created_at").order("created_at",{ascending:false}),
       supabase.from("employees").select("*").order("full_name"), supabase.from("exams").select("id,category,name_pt,name_en,duration_minutes,is_active").order("category").order("name_pt"),
-      supabase.from("appointments").select("id,company_id,employee_id,assessment_type,job_title,starts_at,ends_at,location,status,employees(full_name)").order("starts_at"),
+      supabase.from("appointments").select("id,company_id,employee_id,assessment_type,job_title,starts_at,ends_at,location,location_id,notes,status,employees(full_name,cpf),appointment_exams(exams(name_pt,name_en))").order("starts_at"),
+      supabase.from("occupational_functions").select("id,company_id,name,is_active,occupational_function_exams(exam_id)").order("name"),
+      supabase.from("exam_locations").select("*").order("name"), supabase.from("availability_slots").select("*,exam_locations(name)").order("starts_at"),
+      supabase.from("notifications").select("id,appointment_id,is_read,created_at").order("created_at",{ascending:false}), supabase.from("employee_exams").select("employee_id,exam_id"),
     ]);
-    setIsMaster(Boolean(roles?.some(r=>r.role==="master"))); setCompanies((companyRows??[]) as Company[]); setEmployees((employeeRows??[]) as Employee[]); setExams((examRows??[]) as Exam[]); setAppointments((appointmentRows??[]) as Appointment[]); setLoading(false);
+    setIsMaster(Boolean(roles?.some(r=>r.role==="master"))); setCompanies((companyRows??[]) as Company[]); setEmployees((employeeRows??[]) as Employee[]); setExams((examRows??[]) as Exam[]); setAppointments((appointmentRows??[]) as Appointment[]); setFunctions((functionRows??[]) as OccupationalFunction[]); setLocations((locationRows??[]) as ExamLocation[]); setSlots((slotRows??[]) as AvailabilitySlot[]); setNotifications(notificationRows??[]); setEmployeeExamIds((employeeExamRows??[]).reduce<Record<string,string[]>>((all,row)=>({...all,[row.employee_id]:[...(all[row.employee_id]??[]),row.exam_id]}),{})); setLoading(false);
   }
   useEffect(()=>{void load();},[]);
   async function signOut(){await supabase.auth.signOut();await navigate({to:"/auth",replace:true});}
@@ -56,13 +67,13 @@ function DashboardPage() {
   const today=new Date().toISOString().slice(0,10); const todayCount=appointments.filter(a=>a.starts_at.slice(0,10)===today && a.status!=="cancelled").length;
   const weekCount=appointments.filter(a=>new Date(a.starts_at).getTime()>=Date.now()&&new Date(a.starts_at).getTime()<Date.now()+604800000&&a.status!=="cancelled").length;
   const labels=language==="pt"?{hello:"Olá",companiesDesc:"Cadastros e validações de CNPJ",employeesDesc:"Dados ocupacionais e vínculos",examsDesc:"Catálogo clínico e complementar",scheduleDesc:"Atendimentos e status",join:"Vincular empresa",noCompany:"Sua conta ainda não está vinculada a uma empresa.",review:"Revisar",all:"Todos",clinical:"Clínicos",complementary:"Complementares"}:{hello:"Hello",companiesDesc:"CNPJ registrations and reviews",employeesDesc:"Occupational data and employment",examsDesc:"Clinical and complementary catalog",scheduleDesc:"Appointments and statuses",join:"Join company",noCompany:"Your account is not linked to a company yet.",review:"Review",all:"All",clinical:"Clinical",complementary:"Complementary"};
-  const nav=[{id:"dashboard",label:t("dashboard"),icon:LayoutDashboard},{id:"companies",label:t("companies"),icon:Building2},{id:"employees",label:t("employees"),icon:UsersRound},{id:"exams",label:t("exams"),icon:Stethoscope},{id:"schedule",label:t("schedule"),icon:CalendarDays},{id:"users",label:language==="pt"?"Usuários":"Users",icon:UserRound}] as const;
+  const nav=[{id:"dashboard",label:t("dashboard"),icon:LayoutDashboard},{id:"companies",label:t("companies"),icon:Building2},{id:"employees",label:t("employees"),icon:UsersRound},{id:"exams",label:t("exams"),icon:Stethoscope},{id:"locations",label:language==="pt"?"Locais e horários":"Locations and slots",icon:MapPin},{id:"schedule",label:t("schedule"),icon:CalendarDays},{id:"users",label:language==="pt"?"Usuários":"Users",icon:UserRound}] as const;
 
   if(!loading&&profile&&!profile.is_active)return <main className="grid min-h-screen place-items-center bg-background p-6"><section className="w-full max-w-lg rounded-md border bg-card p-8 text-center"><span className="mx-auto grid size-12 place-items-center rounded-md bg-accent text-primary"><Clock3/></span><h1 className="mt-5 text-2xl font-semibold">{language==="pt"?"Acesso aguardando aprovação":"Access awaiting approval"}</h1><p className="mt-3 text-muted-foreground">{language==="pt"?"Seu cadastro foi recebido. O usuário mestre precisa liberar seu acesso antes da entrada no sistema.":"Your registration was received. The master user must approve your access before you can enter the system."}</p><Button className="mt-6" variant="outline" onClick={signOut}>{t("signOut")}</Button></section></main>;
 
   return <div className="min-h-screen bg-background text-foreground"><aside className={`fixed inset-y-0 left-0 z-40 w-64 border-r border-sidebar-border bg-sidebar transition-transform lg:translate-x-0 ${mobile?"translate-x-0":"-translate-x-full"}`}>
     <div className="flex h-18 items-center justify-between border-b border-sidebar-border px-5"><button className="flex items-center gap-3" onClick={()=>setSection("dashboard")}><span className="grid size-9 place-items-center rounded-md bg-primary text-primary-foreground"><Activity className="size-5"/></span><span className="text-lg font-semibold">MedAgenda</span></button><Button variant="ghost" size="icon" className="lg:hidden" onClick={()=>setMobile(false)}><X/></Button></div>
-    <nav className="space-y-1 p-3">{nav.filter(item=>isMaster||(item.id!=="companies"&&item.id!=="users")).map(item=><Button key={item.id} variant={section===item.id?"secondary":"ghost"} className="w-full justify-start" onClick={()=>{setSection(item.id);setMobile(false)}}><item.icon/>{item.label}</Button>)}</nav>
+    <nav className="space-y-1 p-3">{nav.filter(item=>isMaster||(item.id!=="companies"&&item.id!=="users"&&item.id!=="locations")).map(item=><Button key={item.id} variant={section===item.id?"secondary":"ghost"} className="w-full justify-start" onClick={()=>{setSection(item.id);setMobile(false)}}><item.icon/>{item.label}</Button>)}</nav>
     <div className="absolute inset-x-3 bottom-3 rounded-md border bg-background p-3"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-md bg-accent"><UserRound className="size-4"/></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{profile?.full_name??"—"}</p><p className="text-xs text-muted-foreground">{isMaster?"Master":"Empresa"}</p></div></div><Button variant="ghost" size="sm" className="mt-2 w-full justify-start text-muted-foreground" onClick={signOut}>{t("signOut")}</Button></div>
   </aside>{mobile&&<button className="fixed inset-0 z-30 bg-foreground/20 lg:hidden" aria-label="Fechar menu" onClick={()=>setMobile(false)}/>}<div className="lg:pl-64">
     <header className="sticky top-0 z-20 flex h-18 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur sm:px-6"><Button variant="ghost" size="icon" className="lg:hidden" onClick={()=>setMobile(true)}><Menu/></Button><div className="flex-1"><p className="text-sm text-muted-foreground">MedAgenda Ocupacional</p><h1 className="font-semibold">{nav.find(n=>n.id===section)?.label}</h1></div><div className="flex rounded-md border p-0.5"><Button size="sm" variant={language==="pt"?"secondary":"ghost"} onClick={()=>setLanguage("pt")}>PT</Button><Button size="sm" variant={language==="en"?"secondary":"ghost"} onClick={()=>setLanguage("en")}>EN</Button></div></header>

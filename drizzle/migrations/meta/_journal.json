@@ -50,6 +50,13 @@
       "when": 1790963162290,
       "tag": "0006_optional_employee_documents_and_appointment_job_title",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790986643092,
+      "tag": "0007_controlled_scheduling_and_exam_defaults",
+      "breakpoints": true
     }
   ]
 }

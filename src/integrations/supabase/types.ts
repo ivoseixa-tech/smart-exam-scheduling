@@ -102,7 +102,9 @@ export type Database = {
           id: string
           job_title: string | null
           location: string
+          location_id: string | null
           notes: string | null
+          slot_id: string | null
           starts_at: string
           status: Database["public"]["Enums"]["appointment_status"]
           updated_at: string
@@ -118,7 +120,9 @@ export type Database = {
           id?: string
           job_title?: string | null
           location: string
+          location_id?: string | null
           notes?: string | null
+          slot_id?: string | null
           starts_at: string
           status?: Database["public"]["Enums"]["appointment_status"]
           updated_at?: string
@@ -134,7 +138,9 @@ export type Database = {
           id?: string
           job_title?: string | null
           location?: string
+          location_id?: string | null
           notes?: string | null
+          slot_id?: string | null
           starts_at?: string
           status?: Database["public"]["Enums"]["appointment_status"]
           updated_at?: string
@@ -153,6 +159,58 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "exam_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_slot_id_fkey"
+            columns: ["slot_id"]
+            isOneToOne: false
+            referencedRelation: "availability_slots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      availability_slots: {
+        Row: {
+          created_at: string
+          created_by: string
+          ends_at: string
+          id: string
+          is_active: boolean
+          location_id: string
+          starts_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          ends_at: string
+          id?: string
+          is_active?: boolean
+          location_id: string
+          starts_at: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          ends_at?: string
+          id?: string
+          is_active?: boolean
+          location_id?: string
+          starts_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "availability_slots_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "exam_locations"
             referencedColumns: ["id"]
           },
         ]
@@ -282,6 +340,36 @@ export type Database = {
           },
         ]
       }
+      employee_exams: {
+        Row: {
+          employee_id: string
+          exam_id: string
+        }
+        Insert: {
+          employee_id: string
+          exam_id: string
+        }
+        Update: {
+          employee_id?: string
+          exam_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_exams_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_exams_exam_id_fkey"
+            columns: ["exam_id"]
+            isOneToOne: false
+            referencedRelation: "exams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employees: {
         Row: {
           admission_date: string | null
@@ -296,6 +384,7 @@ export type Database = {
           is_active: boolean
           job_title: string
           nationality: string
+          occupational_function_id: string | null
           rg: string | null
           sex: string
           updated_at: string
@@ -314,6 +403,7 @@ export type Database = {
           is_active?: boolean
           job_title: string
           nationality: string
+          occupational_function_id?: string | null
           rg?: string | null
           sex: string
           updated_at?: string
@@ -332,6 +422,7 @@ export type Database = {
           is_active?: boolean
           job_title?: string
           nationality?: string
+          occupational_function_id?: string | null
           rg?: string | null
           sex?: string
           updated_at?: string
@@ -345,7 +436,71 @@ export type Database = {
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "employees_occupational_function_id_fkey"
+            columns: ["occupational_function_id"]
+            isOneToOne: false
+            referencedRelation: "occupational_functions"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      exam_locations: {
+        Row: {
+          city: string
+          complement: string | null
+          created_at: string
+          created_by: string
+          district: string | null
+          id: string
+          instructions_en: string | null
+          instructions_pt: string | null
+          is_active: boolean
+          name: string
+          number: string | null
+          phone: string | null
+          postal_code: string | null
+          state: string
+          street: string
+          updated_at: string
+        }
+        Insert: {
+          city: string
+          complement?: string | null
+          created_at?: string
+          created_by: string
+          district?: string | null
+          id?: string
+          instructions_en?: string | null
+          instructions_pt?: string | null
+          is_active?: boolean
+          name: string
+          number?: string | null
+          phone?: string | null
+          postal_code?: string | null
+          state: string
+          street: string
+          updated_at?: string
+        }
+        Update: {
+          city?: string
+          complement?: string | null
+          created_at?: string
+          created_by?: string
+          district?: string | null
+          id?: string
+          instructions_en?: string | null
+          instructions_pt?: string | null
+          is_active?: boolean
+          name?: string
+          number?: string | null
+          phone?: string | null
+          postal_code?: string | null
+          state?: string
+          street?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       exams: {
         Row: {
@@ -394,6 +549,109 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      notifications: {
+        Row: {
+          appointment_id: string | null
+          created_at: string
+          id: string
+          is_read: boolean
+          recipient_id: string
+          type: string
+        }
+        Insert: {
+          appointment_id?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          recipient_id: string
+          type: string
+        }
+        Update: {
+          appointment_id?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          recipient_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      occupational_function_exams: {
+        Row: {
+          exam_id: string
+          function_id: string
+        }
+        Insert: {
+          exam_id: string
+          function_id: string
+        }
+        Update: {
+          exam_id?: string
+          function_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "occupational_function_exams_exam_id_fkey"
+            columns: ["exam_id"]
+            isOneToOne: false
+            referencedRelation: "exams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "occupational_function_exams_function_id_fkey"
+            columns: ["function_id"]
+            isOneToOne: false
+            referencedRelation: "occupational_functions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      occupational_functions: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "occupational_functions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -472,6 +730,17 @@ export type Database = {
           _label?: string
           _max_uses?: number
           _plain_code: string
+        }
+        Returns: string
+      }
+      create_controlled_appointment: {
+        Args: {
+          _assessment_type: string
+          _employee_id: string
+          _exam_ids: string[]
+          _job_title: string
+          _notes?: string
+          _slot_id: string
         }
         Returns: string
       }
