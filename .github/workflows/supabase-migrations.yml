@@ -36,39 +36,46 @@ jobs:
       - name: Validate Supabase credentials
         shell: bash
         run: |
-          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+          set -euo pipefail
+          test -n "$SUPABASE_ACCESS_TOKEN" || {
             echo "::error::SUPABASE_ACCESS_TOKEN não está disponível para este workflow."
             exit 1
-          fi
-          if [ -z "$SUPABASE_DB_PASSWORD" ]; then
+          }
+          test -n "$SUPABASE_DB_PASSWORD" || {
             echo "::error::SUPABASE_DB_PASSWORD não está disponível para este workflow."
             exit 1
-          fi
+          }
 
       - name: Link Supabase project
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
 
       - name: Check migration status before deploy
-        run: supabase migration list
+        run: supabase migration list --linked
 
       - name: Preview migrations
-        run: supabase db push --dry-run
+        run: supabase db push --dry-run --linked
 
       - name: Apply migrations
-        run: supabase db push
+        run: supabase db push --linked
 
-      - name: Verify required migration was applied
+      - name: Verify required migration was applied remotely
         shell: bash
         run: |
           set -euo pipefail
-          supabase migration list | grep -E "\\|[[:space:]]*$REQUIRED_MIGRATION[[:space:]]+.*\\|" || {
-            echo "::error::A migration $REQUIRED_MIGRATION não foi encontrada como aplicada no Supabase remoto."
+          status="$(supabase migration list --linked)"
+          printf '%s\n' "$status"
+          if ! printf '%s\n' "$status" | grep -E "│[[:space:]]*$REQUIRED_MIGRATION[[:space:]]*│" >/dev/null; then
+            echo "::error::A migration $REQUIRED_MIGRATION não aparece como aplicada no histórico remoto do Supabase."
             exit 1
-          }
+          fi
 
       - name: Verify database is synchronized
+        shell: bash
         run: |
-          if ! supabase db push --dry-run | grep -qiE "up to date|no changes|already applied"; then
-            echo "::error::O Supabase ainda apresenta migrações pendentes após o deploy."
+          set -euo pipefail
+          preview="$(supabase db push --dry-run --linked)"
+          printf '%s\n' "$preview"
+          if printf '%s\n' "$preview" | grep -E "$REQUIRED_MIGRATION" >/dev/null; then
+            echo "::error::A migration $REQUIRED_MIGRATION ainda aparece como pendente após o deploy."
             exit 1
           fi
