@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
-import { neonConfig, Pool } from "@neondatabase/serverless";
+import { neon } from "@neondatabase/serverless";
 import { z } from "zod";
 
 const clinicInput = z.object({
@@ -145,7 +145,7 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-function getClinicPool() {
+function getClinicSql() {
   const databaseUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
 
   if (!databaseUrl) {
@@ -158,20 +158,16 @@ function getClinicPool() {
     throw new Error("DATABASE_URL/NEON_DATABASE_URL precisa ser a URL completa de conexão do PostgreSQL do Neon.");
   }
 
-  if (typeof WebSocket !== "undefined") {
-    neonConfig.webSocketConstructor = WebSocket;
-  }
-
-  return new Pool({ connectionString: databaseUrl, max: 1 });
+  return neon(databaseUrl);
 }
 
 export const listClinics = createServerFn({ method: "GET" })
   .handler(async () => {
     await authenticateClinicRequest();
 
-    const pool = getClinicPool();
+    const sql = getClinicSql();
     try {
-      const { rows } = await pool.query("SELECT public.list_clinics() AS data");
+      const rows = await sql`SELECT public.list_clinics() AS data`;
       const data = rows[0]?.data;
       if (!Array.isArray(data)) {
         return [];
@@ -181,8 +177,6 @@ export const listClinics = createServerFn({ method: "GET" })
       const message = getErrorMessage(error, "Falha ao consultar as clínicas.");
       console.error("[Clinic:listClinics]", message);
       throw new Error("Não foi possível carregar as clínicas: " + message);
-    } finally {
-      await pool.end();
     }
   });
 
@@ -191,12 +185,14 @@ export const createClinicWithSchedule = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const auth = await authenticateClinicRequest();
 
-    const pool = getClinicPool();
+    const sql = getClinicSql();
     try {
-      const { rows } = await pool.query(
-        "SELECT public.create_clinic_with_schedule($1::jsonb, $2::uuid) AS data",
-        [JSON.stringify(data), auth.userId],
-      );
+      const rows = await sql`
+        SELECT public.create_clinic_with_schedule(
+          ${JSON.stringify(data)}::jsonb,
+          ${auth.userId}::uuid
+        ) AS data
+      `;
 
       const result = rows[0]?.data as { ok?: boolean; clinicId?: string; slotCount?: number } | null;
       if (!result?.ok || typeof result.clinicId !== "string") {
@@ -212,7 +208,4 @@ export const createClinicWithSchedule = createServerFn({ method: "POST" })
       const message = getErrorMessage(error, "Falha ao cadastrar a clínica.");
       console.error("[Clinic:createClinicWithSchedule]", message);
       throw new Error("Não foi possível cadastrar a clínica: " + message);
-    } finally {
-      await pool.end();
-    }
   });
