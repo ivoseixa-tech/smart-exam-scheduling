@@ -181,8 +181,6 @@ async function callClinicApi(action: "list" | "create", data?: unknown) {
 
 export const listClinics = createServerFn({ method: "GET" })
   .handler(async () => {
-    await authenticateClinicRequest();
-
     try {
       const data = await callClinicApi("list");
       return Array.isArray(data) ? JSON.parse(JSON.stringify(data)) as unknown[] : [];
@@ -196,8 +194,6 @@ export const listClinics = createServerFn({ method: "GET" })
 export const createClinicWithSchedule = createServerFn({ method: "POST" })
   .inputValidator((input) => clinicInput.parse(input))
   .handler(async ({ data }) => {
-    const auth = await authenticateClinicRequest();
-
     try {
       const result = await callClinicApi("create", data) as { ok?: boolean; clinicId?: string; slotCount?: number } | null;
       if (!result?.ok || typeof result.clinicId !== "string") {
