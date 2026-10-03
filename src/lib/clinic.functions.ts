@@ -208,4 +208,5 @@ export const createClinicWithSchedule = createServerFn({ method: "POST" })
       const message = getErrorMessage(error, "Falha ao cadastrar a clínica.");
       console.error("[Clinic:createClinicWithSchedule]", message);
       throw new Error("Não foi possível cadastrar a clínica: " + message);
+    }
   });
