@@ -64,7 +64,9 @@ export async function downloadAppointmentGuide(data: AppointmentGuideData) {
   page.drawRectangle({ x: 0, y: 0, width, height: 54, color: rgb(0.95, 0.97, 0.97) });
   page.drawText(text.footer, { x: 42, y: 23, size: 9, font: regular, color: muted });
   const bytes = await pdf.save();
-  const blob = new Blob([bytes], { type: "application/pdf" });
+  const pdfBuffer = new Uint8Array(bytes.length);
+  pdfBuffer.set(bytes);
+  const blob = new Blob([pdfBuffer.buffer], { type: "application/pdf" });
   const url = URL.createObjectURL(blob); const anchor = document.createElement("a");
   anchor.href = url; anchor.download = `guia-${safe(data.employee).toLowerCase().replace(/[^a-z0-9]+/g, "-")}.pdf`; anchor.click(); URL.revokeObjectURL(url);
 }
