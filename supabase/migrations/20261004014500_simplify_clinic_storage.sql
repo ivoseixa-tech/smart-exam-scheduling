@@ -1,7 +1,7 @@
 create or replace function public.save_exam_location(p_location_id uuid, p_data jsonb)
 returns uuid
 language plpgsql
-security invoker
+security definer
 set search_path = public
 as $$
 declare
