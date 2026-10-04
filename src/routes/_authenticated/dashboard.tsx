@@ -275,34 +275,16 @@ function ClinicDialog({open,onClose,onSaved,companies,language,clinic}:{open:boo
       company_ids:selectedCompanies,schedule:active.map(day=>({weekday:day.weekday,start_time:day.start_time,end_time:day.end_time,slot_minutes:Number(day.slot_minutes)}))
     };
     try {
-      const {data:userData,error:userError}=await supabase.auth.getUser();
-      if(userError||!userData.user) throw new Error("Sessão expirada. Entre novamente.");
-      const locationPayload={
-        name:data.name,street:data.street,number:data.number||null,complement:data.complement||null,
-        district:data.district||null,city:data.city,state:data.state,postal_code:data.postal_code||null,
-        phone:data.phone||null,is_active:true,created_by:userData.user.id
-      };
-      let locationId=clinic?.id??"";
-      if(clinic){
-        const {error:updateError}=await supabase.from("exam_locations").update({name:data.name,street:data.street,number:data.number||null,complement:data.complement||null,district:data.district||null,city:data.city,state:data.state,postal_code:data.postal_code||null,phone:data.phone||null,is_active:true,updated_at:new Date().toISOString()}).eq("id",clinic.id);
-        if(updateError) throw updateError;
-        const {error:removeCompaniesError}=await supabase.from("exam_location_companies").delete().eq("location_id",clinic.id);
-        if(removeCompaniesError) throw removeCompaniesError;
-        const {error:removeScheduleError}=await supabase.from("exam_location_schedule_rules").delete().eq("location_id",clinic.id);
-        if(removeScheduleError) throw removeScheduleError;
-      } else {
-        const {data:created,error:createError}=await supabase.from("exam_locations").insert(locationPayload).select("id").single();
-        if(createError||!created) throw createError??new Error("Não foi possível criar a clínica.");
-        locationId=created.id;
-      }
-      const {error:companyError}=await supabase.from("exam_location_companies").insert(
-        selectedCompanies.map(company_id=>({location_id:locationId,company_id}))
-      );
-      if(companyError) throw companyError;
-      const {error:scheduleError}=await supabase.from("exam_location_schedule_rules").insert(
-        active.map(day=>({location_id:locationId,weekday:day.weekday,start_time:day.start_time,end_time:day.end_time,slot_minutes:Number(day.slot_minutes),is_active:true}))
-      );
-      if(scheduleError) throw scheduleError;
+      const {data:locationId,error:saveError}=await supabase.rpc("save_exam_location",{
+        p_location_id:clinic?.id??null,
+        p_data:{
+          name:data.name,street:data.street,number:data.number||null,complement:data.complement||null,
+          district:data.district||null,city:data.city,state:data.state,postal_code:data.postal_code||null,
+          phone:data.phone||null,company_ids:data.company_ids,schedule:data.schedule
+        }
+      });
+      if(saveError) throw saveError;
+      if(!locationId) throw new Error("O banco não retornou o ID da clínica salva.");
       onSaved();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Não foi possível cadastrar a clínica.");
