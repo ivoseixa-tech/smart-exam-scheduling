@@ -249,12 +249,14 @@ function AppointmentDialog({open,onClose,onSaved,employees,exams,profile,compani
   const selectedFunction=functions.find(item=>item.id===functionId);
   const selectedClinic=locations.find(item=>item.id===clinicId);
   const availableClinics=locations.filter(item=>item.is_active&&item.companies?.some(link=>link.company_id===companyId));
-  const effectiveExamIds=employee?(employeeExamIds[employee.id]??[]):selectedExamIds;
+  const employeeExamIdList=employee?(employeeExamIds[employee.id]??[]):[];
+  const functionExamIdList=selectedFunction?.occupational_function_exams?.map(item=>item.exam_id)??[];
+  const effectiveExamIds=employee?Array.from(new Set([...employeeExamIdList,...functionExamIdList])):selectedExamIds;
   const availableExams=exams.filter(item=>item.is_active&&effectiveExamIds.includes(item.id));
 
   useEffect(()=>{if(open){setError("");setCompanyId(profile?.company_id??"");setCpf("");setEmployee(null);setLookupDone(false);setLookupLoading(false);setFunctionId("");setSelectedExamIds([]);setClinicId("");setSlotKey("");setAssessmentType("admission");setSlots([]);setEmployeeFields({full_name:"",rg:"",birthplace:"",nationality:"",birth_date:"",sex:"not_informed",job_title:"",admission_date:"",workplace:""});}},[open,profile?.company_id]);
   useEffect(()=>{if(employee){setFunctionId(employee.occupational_function_id??"");setEmployeeFields({full_name:employee.full_name,rg:employee.rg??"",birthplace:employee.birthplace,nationality:employee.nationality,birth_date:employee.birth_date,sex:employee.sex,job_title:employee.job_title,admission_date:employee.admission_date??"",workplace:employee.workplace});setSelectedExamIds(employeeExamIds[employee.id]??[]);}},[employee,employeeExamIds]);
-  useEffect(()=>{if(!employee&&functionId)setSelectedExamIds(selectedFunction?.occupational_function_exams?.map(item=>item.exam_id)??[]);},[functionId,employee,selectedFunction]);
+  useEffect(()=>{if(functionId&&!employee)setSelectedExamIds(selectedFunction?.occupational_function_exams?.map(item=>item.exam_id)??[]);},[functionId,employee,selectedFunction]);
   useEffect(()=>{
     if(!selectedClinic){setSlots([]);setSlotKey("");return;}
     const generated:{key:string;startsAt:string;endsAt:string;label:string}[]=[];const now=Date.now();
@@ -283,16 +285,25 @@ function AppointmentDialog({open,onClose,onSaved,employees,exams,profile,compani
     if(found){setEmployee(found as Employee);setLookupDone(true);return;}
     setEmployee(null);setFunctionId("");setSelectedExamIds([]);setEmployeeFields({full_name:"",rg:"",birthplace:"",nationality:"",birth_date:"",sex:"not_informed",job_title:"",admission_date:"",workplace:""});setLookupDone(true);
   }
+  function formatCpfInput(value:string){const digits=value.replace(/\D/g,"").slice(0,11);return digits.replace(/^(\d{3})(\d)/,"$1.$2").replace(/^(\d{3})\.(\d{3})(\d)/,"$1.$2.$3").replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/,"$1.$2.$3-$4");}
+  function handleCpfChange(value:string){const formatted=formatCpfInput(value);setCpf(formatted);if(employee||lookupDone){setEmployee(null);setLookupDone(false);setFunctionId("");setSelectedExamIds([]);setEmployeeFields({full_name:"",rg:"",birthplace:"",nationality:"",birth_date:"",sex:"not_informed",job_title:"",admission_date:"",workplace:""});}}
+
   function updateEmployeeField(key:keyof typeof employeeFields,value:string){setEmployeeFields(current=>({...current,[key]:value}));}
 
   async function submit(e:FormEvent<HTMLFormElement>){
     e.preventDefault();setError("");
-    if(!companyId){setError("Selecione a empresa.");return;}if(!lookupDone){setError("Consulte o CPF antes de continuar.");return;}if(!selectedClinic){setError("Selecione uma clínica habilitada para a empresa.");return;}
+    if(!companyId){setError("Selecione a empresa.");return;}if(!selectedClinic){setError("Selecione uma clínica habilitada para a empresa.");return;}
     const slot=slots.find(item=>item.key===slotKey);if(!slot){setError("Selecione um horário disponível.");return;}if(!functionId){setError("Selecione a função ocupacional.");return;}
-    let employeeId=employee?.id??"";let examIds=employee?(employeeExamIds[employee.id]??[]):selectedExamIds;
+    const normalizedCpf=cpf.replace(/\D/g,"");if(normalizedCpf.length!==11){setError("Informe os 11 dígitos do CPF.");return;}
+    let employeeId=employee?.id??"";let examIds=employee?(selectedExamIds.length?selectedExamIds:(employeeExamIds[employee.id]??[])):selectedExamIds;
     if(!employee){
-      const normalizedCpf=cpf.replace(/\D/g,"");const user=(await supabase.auth.getUser()).data.user;
-      if(normalizedCpf.length!==11||!user){setError("Informe um CPF válido e verifique sua sessão.");return;}
+      const user=(await supabase.auth.getUser()).data.user;
+      if(!user){setError("Verifique sua sessão.");return;}
+      const {data:existing,error:existingError}=await supabase.from("employees").select("*").eq("company_id",companyId).eq("cpf",normalizedCpf).maybeSingle();
+      if(existingError){setError("Não foi possível verificar o CPF.");return;}
+      if(existing){
+        employeeId=existing.id;setEmployee(existing as Employee);setFunctionId(existing.occupational_function_id??functionId);examIds=selectedExamIds.length?selectedExamIds:(employeeExamIds[existing.id]??[]);setEmployeeFields({full_name:existing.full_name,rg:existing.rg??"",birthplace:existing.birthplace,nationality:existing.nationality,birth_date:existing.birth_date,sex:existing.sex,job_title:existing.job_title,admission_date:existing.admission_date??"",workplace:existing.workplace});
+      } else {
       const values={company_id:companyId,full_name:employeeFields.full_name.trim(),cpf:normalizedCpf,rg:employeeFields.rg.trim()||null,birthplace:employeeFields.birthplace.trim(),nationality:employeeFields.nationality.trim(),birth_date:employeeFields.birth_date,sex:employeeFields.sex,job_title:employeeFields.job_title.trim(),occupational_function_id:functionId,admission_date:employeeFields.admission_date.trim()||null,workplace:employeeFields.workplace.trim(),created_by:user.id};
       if(values.full_name.length<2||!values.birthplace||!values.nationality||!values.birth_date||!values.job_title||!values.workplace){setError("Preencha todos os dados obrigatórios do funcionário.");return;}
       const {data:createdEmployee,error:employeeError}=await supabase.from("employees").insert(values).select("*").single();
@@ -300,6 +311,7 @@ function AppointmentDialog({open,onClose,onSaved,employees,exams,profile,compani
       employeeId=createdEmployee.id;
       if(selectedExamIds.length){const {error:examError}=await supabase.from("employee_exams").insert(selectedExamIds.map(exam_id=>({employee_id:employeeId,exam_id})));if(examError){await supabase.from("employees").delete().eq("id",employeeId);setError(examError.message);return;}}
       examIds=selectedExamIds;
+      }
     }
     if(!examIds.length){setError("Este funcionário não possui exames cadastrados.");return;}
     try{await runCreateAppointment({data:{employeeId,companyId,clinicId:clinicId,startsAt:slot.startsAt,endsAt:slot.endsAt,assessmentType:assessmentType as "admission"|"periodic"|"return_to_work"|"risk_change"|"dismissal",jobTitle:employeeFields.job_title.trim(),examIds,notes:String(new FormData(e.currentTarget).get("notes")??"").trim()||null}});onSaved();}catch(saveError){setError(saveError instanceof Error?saveError.message:"Não foi possível criar o agendamento.");}
@@ -307,7 +319,7 @@ function AppointmentDialog({open,onClose,onSaved,employees,exams,profile,compani
 
   return <DialogFrame open={open} onClose={onClose} onSubmit={submit} title="Novo agendamento" description="Consulte o funcionário pelo CPF, confirme os dados, selecione a clínica da empresa e o horário.">
     <div className="space-y-5">
-      <div className="grid gap-4 sm:grid-cols-[1fr_auto]"><div className="space-y-2"><Label htmlFor="appointment-cpf">CPF do funcionário</Label><Input id="appointment-cpf" value={cpf} onChange={event=>setCpf(event.target.value)} inputMode="numeric" maxLength={14} placeholder="000.000.000-00"/></div><Button type="button" variant="outline" className="mt-8" onClick={()=>void lookupEmployee()} disabled={lookupLoading}>{lookupLoading?"Consultando...":"Consultar CPF"}</Button></div>
+      <div className="grid gap-4 sm:grid-cols-[1fr_auto]"><div className="space-y-2"><Label htmlFor="appointment-cpf">CPF do funcionário</Label><Input id="appointment-cpf" value={cpf} onChange={event=>handleCpfChange(event.target.value)} inputMode="numeric" maxLength={14} placeholder="000.000.000-00"/></div><Button type="button" variant="outline" className="mt-8" onClick={()=>void lookupEmployee()} disabled={lookupLoading}>{lookupLoading?"Consultando...":"Consultar CPF"}</Button></div>
       {lookupDone&&<p className="text-sm text-muted-foreground">{employee?"Funcionário encontrado. Confira os dados antes de confirmar.":"CPF não encontrado. Preencha os dados para cadastrar o novo funcionário."}</p>}
       {isMaster&&<div className="space-y-2"><Label>Empresa</Label><Select value={companyId} onValueChange={value=>{setCompanyId(value);setCpf("");setEmployee(null);setLookupDone(false);setClinicId("");setSlotKey("");}}><SelectTrigger><SelectValue placeholder="Selecionar empresa"/></SelectTrigger><SelectContent>{companies.filter(item=>item.status==="approved").map(item=><SelectItem key={item.id} value={item.id}>{item.trade_name||item.legal_name}</SelectItem>)}</SelectContent></Select></div>}
       <div className="grid gap-4 sm:grid-cols-2">
@@ -322,7 +334,7 @@ function AppointmentDialog({open,onClose,onSaved,employees,exams,profile,compani
         <div className="space-y-2 sm:col-span-2"><Label>Posto de trabalho</Label><Input value={employeeFields.workplace} readOnly={Boolean(employee)} onChange={event=>updateEmployeeField("workplace",event.target.value)} required/></div>
         <div className="space-y-2 sm:col-span-2"><Label>Função ocupacional cadastrada</Label><Select value={functionId} onValueChange={setFunctionId} disabled={Boolean(employee)}><SelectTrigger><SelectValue placeholder="Selecionar função"/></SelectTrigger><SelectContent>{functions.filter(item=>item.is_active&&item.company_id===companyId).map(item=><SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></div>
       </div>
-      <div className="space-y-3 border-t pt-5"><div><p className="font-semibold">Exames a realizar</p><p className="text-sm text-muted-foreground">{employee?"Exames já cadastrados para este funcionário foram carregados automaticamente.":"A função selecionada sugere os exames cadastrados para a função; eles serão vinculados ao funcionário."}</p></div>{!availableExams.length?<p className="rounded-md border p-3 text-sm text-muted-foreground">Nenhum exame cadastrado para este funcionário/função.</p>:<div className="grid gap-2 sm:grid-cols-2">{availableExams.map(exam=><label key={exam.id} className="flex items-center gap-3 rounded-md border p-3"><Checkbox checked={selectedExamIds.includes(exam.id)} disabled={Boolean(employee)} onCheckedChange={()=>setSelectedExamIds(current=>current.includes(exam.id)?current.filter(id=>id!==exam.id):[...current,exam.id])}/><span className="text-sm">{exam.name_pt}</span></label>)}</div>}</div>
+      <div className="space-y-3 border-t pt-5"><div><p className="font-semibold">Exames a realizar</p><p className="text-sm text-muted-foreground">{employee?"Exames já cadastrados para este funcionário foram carregados automaticamente.":"A função selecionada sugere os exames cadastrados para a função; eles serão vinculados ao funcionário."}</p></div>{!availableExams.length?<p className="rounded-md border p-3 text-sm text-muted-foreground">Nenhum exame cadastrado para este funcionário/função.</p>:<div className="grid gap-2 sm:grid-cols-2">{availableExams.map(exam=><label key={exam.id} className="flex items-center gap-3 rounded-md border p-3"><Checkbox checked={selectedExamIds.includes(exam.id)} onCheckedChange={()=>setSelectedExamIds(current=>current.includes(exam.id)?current.filter(id=>id!==exam.id):[...current,exam.id])}/><span className="text-sm">{exam.name_pt}</span></label>)}</div>}</div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2"><Label>Tipo ocupacional</Label><Select value={assessmentType} onValueChange={setAssessmentType}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="admission">Admissional</SelectItem><SelectItem value="periodic">Periódico</SelectItem><SelectItem value="return_to_work">Retorno ao trabalho</SelectItem><SelectItem value="risk_change">Mudança de risco</SelectItem><SelectItem value="dismissal">Demissional</SelectItem></SelectContent></Select></div>
         <div className="space-y-2"><Label>Clínica de atendimento</Label><Select value={clinicId} onValueChange={value=>{setClinicId(value);setSlotKey("");}}><SelectTrigger><SelectValue placeholder="Selecionar clínica"/></SelectTrigger><SelectContent>{availableClinics.map(item=><SelectItem key={item.id} value={item.id}>{item.name} · {item.city}/{item.state}</SelectItem>)}</SelectContent></Select></div>
