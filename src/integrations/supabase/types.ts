@@ -845,6 +845,10 @@ export type Database = {
         Args: { p_data: Json; p_location_id: string }
         Returns: string
       }
+      save_exam_location_for_user: {
+        Args: { p_data: Json; p_location_id: string; p_user_id: string }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "master" | "company_user"
