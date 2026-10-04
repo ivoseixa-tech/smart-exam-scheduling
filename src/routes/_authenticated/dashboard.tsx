@@ -107,7 +107,7 @@ function DashboardPage() {
     <FunctionDialog open={dialog==="function"} onClose={()=>setDialog(null)} language={language} exams={exams} companyId={profile?.company_id??companies.find(c=>c.status==="approved")?.id??null} onSaved={async()=>{setDialog(null);setNotice(language==="pt"?"Função cadastrada.":"Function registered.");await load()}}/>
     <ClinicDialog open={dialog==="location"} clinic={selectedClinic} onClose={()=>{setDialog(null);setSelectedClinic(null)}} language={language} companies={companies} onSaved={async()=>{setDialog(null);setSelectedClinic(null);setNotice(selectedClinic?(language==="pt"?"Clínica atualizada e agenda regenerada.":"Clinic updated and schedule regenerated."):(language==="pt"?"Clínica cadastrada e agenda gerada.":"Clinic registered and schedule generated."));await load()}}/>
     <ExamDialog open={dialog==="exam"} onClose={()=>setDialog(null)} onSaved={async()=>{setDialog(null);setNotice("Exame adicionado ao catálogo.");await load()}}/>
-    <AppointmentDialog open={dialog==="appointment"} onClose={()=>setDialog(null)} employees={employees} exams={exams} profile={profile} companies={companies} functions={functions} locations={locations} employeeExamIds={employeeExamIds} isMaster={isMaster} onSaved={async()=>{setDialog(null);setNotice("Agendamento criado.");await load()}}/>
+    <AppointmentDialog open={dialog==="appointment"} onClose={()=>setDialog(null)} employees={employees} exams={exams} profile={profile} companies={companies} functions={functions} locations={locations} locationSchedules={locationSchedules} employeeExamIds={employeeExamIds} isMaster={isMaster} onSaved={async()=>{setDialog(null);setNotice("Agendamento criado.");await load()}}/>
     <JoinDialog open={dialog==="join"} onClose={()=>setDialog(null)} onSaved={async()=>{setDialog(null);setNotice("Empresa vinculada com sucesso.");await load()}}/>
     <AgendaAccessDialog open={dialog==="agendaAccess"} company={selectedCompany} language={language} onClose={()=>{setDialog(null);setSelectedCompany(null)}} onSaved={(code)=>{setDialog(null);setSelectedCompany(null);setNotice(`Acesso criado. Código de login: ${code}`)}}/>
   </div>;
@@ -231,7 +231,7 @@ function ClinicDialog({open,onClose,onSaved,companies,language,clinic}:{open:boo
     {error&&<p className="text-sm text-destructive">{error}</p>}
   </DialogFrame>;
 }
-function AppointmentDialog({open,onClose,onSaved,employees,exams,profile,companies,functions,locations,employeeExamIds,isMaster}:{open:boolean;onClose:()=>void;onSaved:()=>void;employees:Employee[];exams:Exam[];profile:Profile|null;companies:Company[];functions:OccupationalFunction[];locations:(ExamLocation & {companies:LocationCompany[];schedule_rules:LocationScheduleRule[]})[];employeeExamIds:Record<string,string[]>;isMaster:boolean}) {
+function AppointmentDialog({open,onClose,onSaved,employees,exams,profile,companies,functions,locations,locationSchedules,employeeExamIds,isMaster}:{open:boolean;onClose:()=>void;onSaved:()=>void;employees:Employee[];exams:Exam[];profile:Profile|null;companies:Company[];functions:OccupationalFunction[];locations:(ExamLocation & {companies:LocationCompany[];schedule_rules:LocationScheduleRule[]})[];locationSchedules:LocationScheduleRule[];employeeExamIds:Record<string,string[]>;isMaster:boolean}) {
   const [error,setError]=useState("");
   const [companyId,setCompanyId]=useState(profile?.company_id??"");
   const [cpf,setCpf]=useState("");
@@ -248,7 +248,7 @@ function AppointmentDialog({open,onClose,onSaved,employees,exams,profile,compani
   const runCreateAppointment=useServerFn(createAppointmentFromClinic);
   const selectedFunction=functions.find(item=>item.id===functionId);
   const selectedClinic=locations.find(item=>item.id===clinicId);
-  const availableClinics=locations.filter(item=>item.is_active&&item.companies?.some(link=>link.company_id===companyId));
+  const availableClinics=locations.filter(item=>item.is_active&&((item.companies??[]).some(link=>link.company_id===companyId)));
   const employeeExamIdList=employee?(employeeExamIds[employee.id]??[]):[];
   const functionExamIdList=selectedFunction?.occupational_function_exams?.map(item=>item.exam_id)??[];
   const effectiveExamIds=employee?Array.from(new Set([...employeeExamIdList,...functionExamIdList])):selectedExamIds;
@@ -260,9 +260,10 @@ function AppointmentDialog({open,onClose,onSaved,employees,exams,profile,compani
   useEffect(()=>{
     if(!selectedClinic){setSlots([]);setSlotKey("");return;}
     const generated:{key:string;startsAt:string;endsAt:string;label:string}[]=[];const now=Date.now();
+    const rules=(selectedClinic.schedule_rules?.length?selectedClinic.schedule_rules:locationSchedules.filter(item=>item.location_id===selectedClinic.id));
     for(let offset=0;offset<60&&generated.length<400;offset++){
       const date=new Date();date.setHours(0,0,0,0);date.setDate(date.getDate()+offset);const weekday=date.getDay();
-      for(const rule of selectedClinic.schedule_rules?.filter(item=>item.is_active&&item.weekday===weekday)??[]){
+      for(const rule of rules.filter(item=>item.is_active&&item.weekday===weekday)){
         const [sh,sm]=String(rule.start_time).slice(0,5).split(":").map(Number);const [eh,em]=String(rule.end_time).slice(0,5).split(":").map(Number);
         for(let minute=sh*60+sm;minute+Number(rule.slot_minutes)<=eh*60+em;minute+=Number(rule.slot_minutes)){
           const startDate=new Date(date);startDate.setHours(Math.floor(minute/60),minute%60,0,0);const endDate=new Date(startDate.getTime()+Number(rule.slot_minutes)*60000);
