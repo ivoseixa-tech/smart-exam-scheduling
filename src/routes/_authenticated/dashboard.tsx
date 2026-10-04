@@ -284,7 +284,7 @@ function ClinicDialog({open,onClose,onSaved,companies,language,clinic}:{open:boo
       };
       let locationId=clinic?.id??"";
       if(clinic){
-        const {error:updateError}=await supabase.from("exam_locations").update({...locationPayload,created_by:undefined,updated_at:new Date().toISOString()}).eq("id",clinic.id);
+        const {error:updateError}=await supabase.from("exam_locations").update({name:data.name,street:data.street,number:data.number||null,complement:data.complement||null,district:data.district||null,city:data.city,state:data.state,postal_code:data.postal_code||null,phone:data.phone||null,is_active:true,updated_at:new Date().toISOString()}).eq("id",clinic.id);
         if(updateError) throw updateError;
         const {error:removeCompaniesError}=await supabase.from("exam_location_companies").delete().eq("location_id",clinic.id);
         if(removeCompaniesError) throw removeCompaniesError;
