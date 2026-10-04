@@ -259,7 +259,6 @@ function ClinicDialog({open,onClose,onSaved,companies,language,clinic}:{open:boo
   const [error,setError]=useState("");
   const [selectedCompanies,setSelectedCompanies]=useState<string[]>([]);
   const [schedule,setSchedule]=useState(days.map((_,weekday)=>({weekday,enabled:weekday>=1&&weekday<=5,start_time:"08:00",end_time:"17:00",slot_minutes:30})));
-  const runCreateClinic=useServerFn(createClinicWithSchedule); const runUpdateClinic=useServerFn(updateClinicWithSchedule);
   useEffect(()=>{if(open){setError("");setSelectedCompanies(clinic?.companies?.map(x=>x.company_id)??[]);const rules=clinic?.schedule_rules??[];setSchedule(days.map((_,weekday)=>{const rule=rules.find(x=>x.weekday===weekday);return {weekday,enabled:Boolean(rule),start_time:String(rule?.start_time??"08:00").slice(0,5),end_time:String(rule?.end_time??"17:00").slice(0,5),slot_minutes:Number(rule?.slot_minutes??30)}}));}},[open,language,clinic,days]);
   function toggleCompany(id:string){setSelectedCompanies(current=>current.includes(id)?current.filter(x=>x!==id):[...current,id]);}
   function updateDay(weekday:number,key:"enabled"|"start_time"|"end_time"|"slot_minutes",value:boolean|string|number){setSchedule(current=>current.map(day=>day.weekday===weekday?{...day,[key]:value}:day));}
@@ -275,7 +274,14 @@ function ClinicDialog({open,onClose,onSaved,companies,language,clinic}:{open:boo
       state:String(f.get("state")).trim().toUpperCase(),postal_code:String(f.get("postal_code")).replace(/\\D/g,""),phone:String(f.get("phone")).trim(),
       company_ids:selectedCompanies,schedule:active.map(day=>({weekday:day.weekday,start_time:day.start_time,end_time:day.end_time,slot_minutes:Number(day.slot_minutes)}))
     };
-    try { if(clinic){ await runUpdateClinic({ data:{clinicId:clinic.id,data} }); } else { await runCreateClinic({ data }); } onSaved(); } catch (saveError) { setError(saveError instanceof Error ? saveError.message : "Não foi possível cadastrar a clínica."); }
+    try {
+      const {data:locationId,error:saveError}=await supabase.rpc("save_exam_location",{p_location_id:clinic?.id??null,p_data:data});
+      if(saveError) throw saveError;
+      if(typeof locationId!=="string") throw new Error("O banco não confirmou o cadastro da clínica.");
+      onSaved();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Não foi possível cadastrar a clínica.");
+    }
   }
   const approved=companies.filter(c=>c.status==="approved");
   return <DialogFrame open={open} onClose={onClose} onSubmit={submit} title={clinic?(language==="pt"?"Editar clínica de atendimento":"Edit service clinic"):(language==="pt"?"Cadastrar clínica de atendimento":"Register service clinic")} description={clinic?(language==="pt"?"Atualize endereço, empresas habilitadas e agenda semanal.":"Update the address, enabled companies and weekly schedule."):(language==="pt"?"Cadastre endereço, empresas habilitadas e agenda semanal. Os horários serão gerados automaticamente.":"Register the address, enabled companies and weekly schedule.")}>
