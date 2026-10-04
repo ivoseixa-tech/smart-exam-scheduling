@@ -67,19 +67,31 @@ function DashboardPage() {
     ]);
     const master=Boolean(roles?.some(r=>r.role==="master"));
     setIsMaster(master); setCompanies((companyRows??[]) as Company[]); setEmployees((employeeRows??[]) as Employee[]); setExams((examRows??[]) as Exam[]); setAppointments((appointmentRows??[]) as Appointment[]); setFunctions((functionRows??[]) as OccupationalFunction[]); setSlots((slotRows??[]) as AvailabilitySlot[]); setNotifications(notificationRows??[]); setEmployeeExamIds((employeeExamRows??[]).reduce<Record<string,string[]>>((all,row)=>({...all,[row.employee_id]:[...(all[row.employee_id]??[]),row.exam_id]}),{}));
-    const [{data:clinicRows},{data:clinicCompanyRows},{data:clinicScheduleRows}]=await Promise.all([
+    const [
+      {data:clinicRows,error:clinicError},
+      {data:clinicCompanyRows,error:clinicCompanyError},
+      {data:clinicScheduleRows,error:clinicScheduleError},
+    ]=await Promise.all([
       supabase.from("exam_locations").select("*").eq("is_active",true).order("name"),
       supabase.from("exam_location_companies").select("location_id,company_id"),
       supabase.from("exam_location_schedule_rules").select("id,location_id,weekday,start_time,end_time,slot_minutes,is_active").eq("is_active",true).order("weekday").order("start_time"),
     ]);
-    const clinicList=(clinicRows??[]).map(row=>({
-      ...(row as ExamLocation),
-      companies:(clinicCompanyRows??[]).filter(link=>link.location_id===row.id) as LocationCompany[],
-      schedule_rules:(clinicScheduleRows??[]).filter(rule=>rule.location_id===row.id) as LocationScheduleRule[],
-    }));
-    setLocations(clinicList);
-    setLocationCompanies(clinicCompanyRows??[]);
-    setLocationSchedules(clinicScheduleRows??[]);
+    if(clinicError||clinicCompanyError||clinicScheduleError){
+      console.error("[Clinic:load]",clinicError??clinicCompanyError??clinicScheduleError);
+      setNotice("Não foi possível carregar as clínicas e horários. Atualize a página.");
+      setLocations([]);
+      setLocationCompanies([]);
+      setLocationSchedules([]);
+    }else{
+      const clinicList=(clinicRows??[]).map(row=>({
+        ...(row as ExamLocation),
+        companies:(clinicCompanyRows??[]).filter(link=>link.location_id===row.id) as LocationCompany[],
+        schedule_rules:(clinicScheduleRows??[]).filter(rule=>rule.location_id===row.id) as LocationScheduleRule[],
+      }));
+      setLocations(clinicList);
+      setLocationCompanies(clinicCompanyRows??[]);
+      setLocationSchedules(clinicScheduleRows??[]);
+    }
     setLoading(false);
   }
   useEffect(()=>{void load();},[]);
@@ -346,13 +358,38 @@ function AppointmentDialog({open,onClose,onSaved,employees,exams,profile,compani
   const runCreateAppointment=useServerFn(createAppointmentFromClinic);
   const selectedFunction=functions.find(item=>item.id===functionId);
   const selectedClinic=locations.find(item=>item.id===clinicId);
-  const availableClinics=locations.filter(item=>item.is_active&&((item.companies??[]).some(link=>link.company_id===companyId)));
+  const availableClinics=locations.filter(item=>{
+    if(!item.is_active||!companyId)return false;
+    const linkedFromClinic=(item.companies??[]).some(link=>link.company_id===companyId);
+    const linkedFromState=locationCompanies.some(link=>link.location_id===item.id&&link.company_id===companyId);
+    return linkedFromClinic||linkedFromState;
+  });
   const employeeExamIdList=employee?(employeeExamIds[employee.id]??[]):[];
   const functionExamIdList=selectedFunction?.occupational_function_exams?.map(item=>item.exam_id)??[];
   const effectiveExamIds=employee?Array.from(new Set([...employeeExamIdList,...functionExamIdList])):selectedExamIds;
   const availableExams=exams.filter(item=>item.is_active&&effectiveExamIds.includes(item.id));
 
-  useEffect(()=>{if(open){setError("");setCompanyId(profile?.company_id??"");setCpf("");setEmployee(null);setLookupDone(false);setLookupLoading(false);setFunctionId("");setSelectedExamIds([]);setClinicId("");setSlotKey("");setAssessmentType("admission");setSlots([]);setEmployeeFields({full_name:"",rg:"",birthplace:"",nationality:"",birth_date:"",sex:"not_informed",job_title:"",admission_date:"",workplace:""});}},[open,profile?.company_id]);
+  useEffect(()=>{
+    if(!open)return;
+    setError("");
+    setCompanyId(profile?.company_id??"");
+    setCpf("");
+    setEmployee(null);
+    setLookupDone(false);
+    setLookupLoading(false);
+    setFunctionId("");
+    setSelectedExamIds([]);
+    setClinicId("");
+    setSlotKey("");
+    setAssessmentType("admission");
+    setSlots([]);
+    setEmployeeFields({full_name:"",rg:"",birthplace:"",nationality:"",birth_date:"",sex:"not_informed",job_title:"",admission_date:"",workplace:""});
+  },[open,profile?.company_id]);
+  useEffect(()=>{
+    if(!open||!isMaster||companyId)return;
+    const approved=companies.filter(item=>item.status==="approved");
+    if(approved.length===1)setCompanyId(approved[0].id);
+  },[open,isMaster,companyId,companies]);
   useEffect(()=>{if(employee){setFunctionId(employee.occupational_function_id??"");setEmployeeFields({full_name:employee.full_name,rg:employee.rg??"",birthplace:employee.birthplace,nationality:employee.nationality,birth_date:employee.birth_date,sex:employee.sex,job_title:employee.job_title,admission_date:employee.admission_date??"",workplace:employee.workplace});setSelectedExamIds(employeeExamIds[employee.id]??[]);}},[employee,employeeExamIds]);
   useEffect(()=>{if(functionId&&!employee)setSelectedExamIds(selectedFunction?.occupational_function_exams?.map(item=>item.exam_id)??[]);},[functionId,employee,selectedFunction]);
   useEffect(()=>{
