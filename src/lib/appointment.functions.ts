@@ -82,7 +82,7 @@ export const createAppointmentFromClinic = createServerFn({ method: "POST" })
 
       const { data: employee, error: employeeError } = await supabaseAdmin
         .from("employees")
-        .select("id,company_id,is_active")
+        .select("id,company_id,is_active,occupational_function_id")
         .eq("id", data.employeeId)
         .maybeSingle();
       if (employeeError) throw employeeError;
@@ -120,8 +120,24 @@ export const createAppointmentFromClinic = createServerFn({ method: "POST" })
         .eq("employee_id", data.employeeId)
         .in("exam_id", data.examIds);
       if (employeeExamsError) throw employeeExamsError;
-      if ((employeeExams?.length ?? 0) !== data.examIds.length) {
-        throw new Error("Um ou mais exames não estão cadastrados para este funcionário.");
+
+      const employeeExamSet = new Set((employeeExams ?? []).map((row) => row.exam_id));
+      let functionExamSet = new Set<string>();
+      if (employee?.occupational_function_id) {
+        const { data: functionExams, error: functionExamsError } = await supabaseAdmin
+          .from("occupational_function_exams")
+          .select("exam_id")
+          .eq("function_id", employee.occupational_function_id)
+          .in("exam_id", data.examIds);
+        if (functionExamsError) throw functionExamsError;
+        functionExamSet = new Set((functionExams ?? []).map((row) => row.exam_id));
+      }
+
+      const unauthorizedExam = data.examIds.some(
+        (examId) => !employeeExamSet.has(examId) && !functionExamSet.has(examId),
+      );
+      if (unauthorizedExam) {
+        throw new Error("Um ou mais exames não estão cadastrados para este funcionário ou para sua função.");
       }
 
       const { data: conflicts, error: conflictError } = await supabaseAdmin
