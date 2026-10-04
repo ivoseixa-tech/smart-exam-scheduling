@@ -281,7 +281,7 @@ function ClinicDialog({open,onClose,onSaved,companies,language,clinic}:{open:boo
       if (sessionError || !sessionData.session?.access_token) {
         throw new Error("Sessão expirada. Entre novamente no sistema.");
       }
-      const { locationId } = await saveClinicFromMaster({
+      const { locationId } = await runSaveClinic({
         data: {
           locationId: clinic?.id ?? null,
           clinic: {
