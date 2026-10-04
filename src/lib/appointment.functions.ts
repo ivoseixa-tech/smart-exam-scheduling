@@ -128,6 +128,7 @@ export const createAppointmentFromClinic = createServerFn({ method: "POST" })
         .from("appointments")
         .select("id")
         .eq("company_id", data.companyId)
+        .eq("location", clinic.name)
         .neq("status", "cancelled")
         .lt("starts_at", data.endsAt)
         .gt("ends_at", data.startsAt)
@@ -159,6 +160,7 @@ export const createAppointmentFromClinic = createServerFn({ method: "POST" })
         .from("appointment_exams")
         .insert(data.examIds.map((exam_id) => ({ appointment_id: created.id, exam_id })));
       if (examInsertError) {
+        await supabaseAdmin.from("appointment_exams").delete().eq("appointment_id", created.id);
         await supabaseAdmin.from("appointments").delete().eq("id", created.id);
         throw examInsertError;
       }
