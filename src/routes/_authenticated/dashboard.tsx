@@ -8,7 +8,7 @@ import { useI18n } from "@/lib/i18n";
 import { lookupCnpj } from "@/lib/cnpj.functions";
 import { createCompanyAgendaUser } from "@/lib/admin-users.functions";
 import { createAppointmentFromClinic } from "@/lib/appointment.functions";
-import { saveClinicFromMaster } from "@/lib/clinic.functions";
+import { loadClinicsForCurrentUser, saveClinicFromMaster } from "@/lib/clinic.functions";
 import { UserManagement } from "@/components/UserManagement";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +51,8 @@ function DashboardPage() {
   const [employeeExamIds,setEmployeeExamIds]=useState<Record<string,string[]>>({});
   const [dialog,setDialog]=useState<"company"|"employee"|"exam"|"function"|"location"|"slot"|"appointment"|"join"|"agendaAccess"|null>(null); const [selectedCompany,setSelectedCompany]=useState<Company|null>(null); const [selectedEmployee,setSelectedEmployee]=useState<Employee|null>(null); const [selectedClinic,setSelectedClinic]=useState<(ExamLocation & {companies:LocationCompany[];schedule_rules:LocationScheduleRule[]})|null>(null); const [query,setQuery]=useState(""); const [notice,setNotice]=useState("");
 
+  const loadClinics = useServerFn(loadClinicsForCurrentUser);
+
   async function load() {
     setLoading(true); const { data:userData }=await supabase.auth.getUser(); const user=userData.user; if(!user)return;
     let { data:p }=await supabase.from("profiles").select("id,company_id,full_name,preferred_language,is_active").eq("id",user.id).maybeSingle();
@@ -67,30 +69,25 @@ function DashboardPage() {
     ]);
     const master=Boolean(roles?.some(r=>r.role==="master"));
     setIsMaster(master); setCompanies((companyRows??[]) as Company[]); setEmployees((employeeRows??[]) as Employee[]); setExams((examRows??[]) as Exam[]); setAppointments((appointmentRows??[]) as Appointment[]); setFunctions((functionRows??[]) as OccupationalFunction[]); setSlots((slotRows??[]) as AvailabilitySlot[]); setNotifications(notificationRows??[]); setEmployeeExamIds((employeeExamRows??[]).reduce<Record<string,string[]>>((all,row)=>({...all,[row.employee_id]:[...(all[row.employee_id]??[]),row.exam_id]}),{}));
-    const [
-      {data:clinicRows,error:clinicError},
-      {data:clinicCompanyRows,error:clinicCompanyError},
-      {data:clinicScheduleRows,error:clinicScheduleError},
-    ]=await Promise.all([
-      supabase.from("exam_locations").select("*").eq("is_active",true).order("name"),
-      supabase.from("exam_location_companies").select("location_id,company_id"),
-      supabase.from("exam_location_schedule_rules").select("id,location_id,weekday,start_time,end_time,slot_minutes,is_active").eq("is_active",true).order("weekday").order("start_time"),
-    ]);
-    if(clinicError||clinicCompanyError||clinicScheduleError){
-      console.error("[Clinic:load]",clinicError??clinicCompanyError??clinicScheduleError);
+    try {
+      const clinicData = await loadClinics();
+      const clinicRows = clinicData.locations ?? [];
+      const clinicCompanyRows = clinicData.links ?? [];
+      const clinicScheduleRows = clinicData.schedules ?? [];
+      const clinicList = clinicRows.map((row) => ({
+        ...(row as ExamLocation),
+        companies: clinicCompanyRows.filter((link) => link.location_id === row.id) as LocationCompany[],
+        schedule_rules: clinicScheduleRows.filter((rule) => rule.location_id === row.id) as LocationScheduleRule[],
+      }));
+      setLocations(clinicList);
+      setLocationCompanies(clinicCompanyRows);
+      setLocationSchedules(clinicScheduleRows);
+    } catch (clinicLoadError) {
+      console.error("[Clinic:load]", clinicLoadError);
       setNotice("Não foi possível carregar as clínicas e horários. Atualize a página.");
       setLocations([]);
       setLocationCompanies([]);
       setLocationSchedules([]);
-    }else{
-      const clinicList=(clinicRows??[]).map(row=>({
-        ...(row as ExamLocation),
-        companies:(clinicCompanyRows??[]).filter(link=>link.location_id===row.id) as LocationCompany[],
-        schedule_rules:(clinicScheduleRows??[]).filter(rule=>rule.location_id===row.id) as LocationScheduleRule[],
-      }));
-      setLocations(clinicList);
-      setLocationCompanies(clinicCompanyRows??[]);
-      setLocationSchedules(clinicScheduleRows??[]);
     }
     setLoading(false);
   }
