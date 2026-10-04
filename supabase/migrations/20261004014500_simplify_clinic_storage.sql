@@ -114,3 +114,10 @@ revoke execute on function public.save_exam_location(uuid, jsonb) from public, a
 grant execute on function public.save_exam_location(uuid, jsonb) to authenticated;
 revoke execute on function public.deactivate_exam_location(uuid) from public, anon;
 grant execute on function public.deactivate_exam_location(uuid) to authenticated;
+
+
+-- Server-side clinic save used by the authenticated application server.
+-- EXECUTE is intentionally limited to service_role; the function validates p_user_id itself.
+revoke execute on function public.save_exam_location_for_user(uuid, jsonb, uuid) from public, anon, authenticated;
+grant execute on function public.save_exam_location_for_user(uuid, jsonb, uuid) to service_role;
+notify pgrst, 'reload schema';
