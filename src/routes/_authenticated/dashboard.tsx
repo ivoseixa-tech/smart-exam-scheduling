@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
 import { lookupCnpj } from "@/lib/cnpj.functions";
 import { createCompanyAgendaUser } from "@/lib/admin-users.functions";
+import { createAppointmentFromClinic } from "@/lib/appointment.functions";
 import { createClinicWithSchedule, deleteClinic, listClinics, updateClinicWithSchedule } from "@/lib/clinic.functions";
 import { UserManagement } from "@/components/UserManagement";
 import { Button } from "@/components/ui/button";
@@ -106,7 +107,7 @@ function DashboardPage() {
     <FunctionDialog open={dialog==="function"} onClose={()=>setDialog(null)} language={language} exams={exams} companyId={profile?.company_id??companies.find(c=>c.status==="approved")?.id??null} onSaved={async()=>{setDialog(null);setNotice(language==="pt"?"Função cadastrada.":"Function registered.");await load()}}/>
     <ClinicDialog open={dialog==="location"} clinic={selectedClinic} onClose={()=>{setDialog(null);setSelectedClinic(null)}} language={language} companies={companies} onSaved={async()=>{setDialog(null);setSelectedClinic(null);setNotice(selectedClinic?(language==="pt"?"Clínica atualizada e agenda regenerada.":"Clinic updated and schedule regenerated."):(language==="pt"?"Clínica cadastrada e agenda gerada.":"Clinic registered and schedule generated."));await load()}}/>
     <ExamDialog open={dialog==="exam"} onClose={()=>setDialog(null)} onSaved={async()=>{setDialog(null);setNotice("Exame adicionado ao catálogo.");await load()}}/>
-    <AppointmentDialog open={dialog==="appointment"} onClose={()=>setDialog(null)} employees={employees} exams={exams} profile={profile} companies={companies} isMaster={isMaster} onSaved={async()=>{setDialog(null);setNotice("Agendamento criado.");await load()}}/>
+    <AppointmentDialog open={dialog==="appointment"} onClose={()=>setDialog(null)} employees={employees} exams={exams} profile={profile} companies={companies} functions={functions} locations={locations} employeeExamIds={employeeExamIds} isMaster={isMaster} onSaved={async()=>{setDialog(null);setNotice("Agendamento criado.");await load()}}/>
     <JoinDialog open={dialog==="join"} onClose={()=>setDialog(null)} onSaved={async()=>{setDialog(null);setNotice("Empresa vinculada com sucesso.");await load()}}/>
     <AgendaAccessDialog open={dialog==="agendaAccess"} company={selectedCompany} language={language} onClose={()=>{setDialog(null);setSelectedCompany(null)}} onSaved={(code)=>{setDialog(null);setSelectedCompany(null);setNotice(`Acesso criado. Código de login: ${code}`)}}/>
   </div>;
@@ -230,8 +231,108 @@ function ClinicDialog({open,onClose,onSaved,companies,language,clinic}:{open:boo
     {error&&<p className="text-sm text-destructive">{error}</p>}
   </DialogFrame>;
 }
-function AppointmentDialog({open,onClose,onSaved,employees,exams,profile,companies,isMaster}:{open:boolean;onClose:()=>void;onSaved:()=>void;employees:Employee[];exams:Exam[];profile:Profile|null;companies:Company[];isMaster:boolean}){const [error,setError]=useState("");const [selectedEmployeeId,setSelectedEmployeeId]=useState("");const [selectedSlotId,setSelectedSlotId]=useState("");const [slots,setSlots]=useState<AvailabilitySlot[]>([]);const [allowedExamIds,setAllowedExamIds]=useState<string[]>([]);const selectedEmployee=employees.find(employee=>employee.id===selectedEmployeeId);useEffect(()=>{if(!open)return;setError("");setSelectedSlotId("");void supabase.from("availability_slots").select("id,location_id,starts_at,ends_at,is_active,exam_locations(name)").eq("is_active",true).gt("starts_at",new Date().toISOString()).order("starts_at",{ascending:true}).limit(500).then(({data,error:loadError})=>{if(loadError){setError("Não foi possível carregar os horários.");setSlots([]);return;}setSlots((data??[]) as AvailabilitySlot[]);});},[open]);useEffect(()=>{if(!selectedEmployeeId){setAllowedExamIds([]);return;}void supabase.from("employee_exams").select("exam_id").eq("employee_id",selectedEmployeeId).then(({data,error:loadError})=>{if(loadError){setAllowedExamIds([]);return;}setAllowedExamIds((data??[]).map((row:{exam_id:string})=>row.exam_id));});},[selectedEmployeeId]);async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();const f=new FormData(e.currentTarget);const employee=employees.find(x=>x.id===String(f.get("employee_id")));const slot=slots.find(x=>x.id===String(f.get("slot_id")));if(!employee||!slot){setError("Selecione funcionário e horário.");return;}const jobTitle=String(f.get("job_title")).trim();if(!jobTitle){setError("Informe a função do funcionário.");return;}const examId=String(f.get("exam_id"));if(!examId){setError("Selecione um exame autorizado para o funcionário.");return;}if(!allowedExamIds.includes(examId)&&!isMaster){setError("O exame selecionado não está autorizado para este funcionário.");return;}const {data:created,error:saveError}=await supabase.rpc("create_controlled_appointment",{_employee_id:employee.id,_assessment_type:String(f.get("assessment_type")),_job_title:jobTitle,_slot_id:slot.id,_exam_ids:[examId],_notes:String(f.get("notes")).trim()||null});if(saveError){setError(saveError.message);return;}if(!created){setError("Não foi possível criar o agendamento.");return;}onSaved();}const availableExams=exams.filter(x=>x.is_active&&(isMaster||allowedExamIds.includes(x.id)));const availableSlots=slots.filter(x=>x.is_active);return <DialogFrame open={open} onClose={onClose} onSubmit={submit} title="Novo agendamento" description="Selecione funcionário, exame autorizado e um horário disponível."><div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label>Funcionário</Label><Select name="employee_id" value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}><SelectTrigger><SelectValue placeholder="Selecionar"/></SelectTrigger><SelectContent>{employees.map(e=><SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>)}</SelectContent></Select></div><Field key={selectedEmployee?.id??"empty-job"} label="Função" name="job_title" defaultValue={selectedEmployee?.job_title??""}/><div className="space-y-2"><Label>Tipo ocupacional</Label><Select name="assessment_type" defaultValue="admission"><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="admission">Admissional</SelectItem><SelectItem value="periodic">Periódico</SelectItem><SelectItem value="return_to_work">Retorno ao trabalho</SelectItem><SelectItem value="risk_change">Mudança de risco</SelectItem><SelectItem value="dismissal">Demissional</SelectItem></SelectContent></Select></div><div className="space-y-2"><Label>Exame autorizado</Label><Select name="exam_id"><SelectTrigger><SelectValue placeholder="Selecionar"/></SelectTrigger><SelectContent>{availableExams.map(x=><SelectItem key={x.id} value={x.id}>{x.name_pt}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2 sm:col-span-2"><Label>Horário disponível</Label><Select name="slot_id" value={selectedSlotId} onValueChange={setSelectedSlotId}><SelectTrigger><SelectValue placeholder="Selecionar horário"/></SelectTrigger><SelectContent>{availableSlots.map(slot=><SelectItem key={slot.id} value={slot.id}>{new Date(slot.starts_at).toLocaleString("pt-BR")} · {slot.exam_locations?.name??"Local"}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2 sm:col-span-2"><Label htmlFor="notes">Observações</Label><Textarea id="notes" name="notes" maxLength={2000}/></div></div>{error&&<p className="text-sm text-destructive">{error}</p>}</DialogFrame>}
+function AppointmentDialog({open,onClose,onSaved,employees,exams,profile,companies,functions,locations,employeeExamIds,isMaster}:{open:boolean;onClose:()=>void;onSaved:()=>void;employees:Employee[];exams:Exam[];profile:Profile|null;companies:Company[];functions:OccupationalFunction[];locations:(ExamLocation & {companies:LocationCompany[];schedule_rules:LocationScheduleRule[]})[];employeeExamIds:Record<string,string[]>;isMaster:boolean}) {
+  const [error,setError]=useState("");
+  const [companyId,setCompanyId]=useState(profile?.company_id??"");
+  const [cpf,setCpf]=useState("");
+  const [employee,setEmployee]=useState<Employee|null>(null);
+  const [lookupDone,setLookupDone]=useState(false);
+  const [lookupLoading,setLookupLoading]=useState(false);
+  const [functionId,setFunctionId]=useState("");
+  const [selectedExamIds,setSelectedExamIds]=useState<string[]>([]);
+  const [clinicId,setClinicId]=useState("");
+  const [slotKey,setSlotKey]=useState("");
+  const [assessmentType,setAssessmentType]=useState("admission");
+  const [slots,setSlots]=useState<{key:string;startsAt:string;endsAt:string;label:string}[]>([]);
+  const [employeeFields,setEmployeeFields]=useState({full_name:"",rg:"",birthplace:"",nationality:"",birth_date:"",sex:"not_informed",job_title:"",admission_date:"",workplace:""});
+  const runCreateAppointment=useServerFn(createAppointmentFromClinic);
+  const selectedFunction=functions.find(item=>item.id===functionId);
+  const selectedClinic=locations.find(item=>item.id===clinicId);
+  const availableClinics=locations.filter(item=>item.is_active&&item.companies?.some(link=>link.company_id===companyId));
+  const effectiveExamIds=employee?(employeeExamIds[employee.id]??[]):selectedExamIds;
+  const availableExams=exams.filter(item=>item.is_active&&effectiveExamIds.includes(item.id));
 
+  useEffect(()=>{if(open){setError("");setCompanyId(profile?.company_id??"");setCpf("");setEmployee(null);setLookupDone(false);setLookupLoading(false);setFunctionId("");setSelectedExamIds([]);setClinicId("");setSlotKey("");setAssessmentType("admission");setSlots([]);setEmployeeFields({full_name:"",rg:"",birthplace:"",nationality:"",birth_date:"",sex:"not_informed",job_title:"",admission_date:"",workplace:""});}},[open,profile?.company_id]);
+  useEffect(()=>{if(employee){setFunctionId(employee.occupational_function_id??"");setEmployeeFields({full_name:employee.full_name,rg:employee.rg??"",birthplace:employee.birthplace,nationality:employee.nationality,birth_date:employee.birth_date,sex:employee.sex,job_title:employee.job_title,admission_date:employee.admission_date??"",workplace:employee.workplace});setSelectedExamIds(employeeExamIds[employee.id]??[]);}},[employee,employeeExamIds]);
+  useEffect(()=>{if(!employee&&functionId)setSelectedExamIds(selectedFunction?.occupational_function_exams?.map(item=>item.exam_id)??[]);},[functionId,employee,selectedFunction]);
+  useEffect(()=>{
+    if(!selectedClinic){setSlots([]);setSlotKey("");return;}
+    const generated:{key:string;startsAt:string;endsAt:string;label:string}[]=[];const now=Date.now();
+    for(let offset=0;offset<60&&generated.length<400;offset++){
+      const date=new Date();date.setHours(0,0,0,0);date.setDate(date.getDate()+offset);const weekday=date.getDay();
+      for(const rule of selectedClinic.schedule_rules?.filter(item=>item.is_active&&item.weekday===weekday)??[]){
+        const [sh,sm]=String(rule.start_time).slice(0,5).split(":").map(Number);const [eh,em]=String(rule.end_time).slice(0,5).split(":").map(Number);
+        for(let minute=sh*60+sm;minute+Number(rule.slot_minutes)<=eh*60+em;minute+=Number(rule.slot_minutes)){
+          const startDate=new Date(date);startDate.setHours(Math.floor(minute/60),minute%60,0,0);const endDate=new Date(startDate.getTime()+Number(rule.slot_minutes)*60000);
+          if(startDate.getTime()<=now)continue;
+          generated.push({key:startDate.toISOString(),startsAt:startDate.toISOString(),endsAt:endDate.toISOString(),label:startDate.toLocaleDateString("pt-BR")+" · "+startDate.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})+"–"+endDate.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});
+          if(generated.length>=400)break;
+        }
+        if(generated.length>=400)break;
+      }
+    }
+    setSlots(generated);setSlotKey(generated[0]?.key??"");
+  },[selectedClinic]);
+
+  async function lookupEmployee(){
+    const normalized=cpf.replace(/\D/g,"");if(normalized.length!==11){setError("Informe os 11 dígitos do CPF.");return;}if(!companyId){setError("Selecione a empresa antes de consultar o CPF.");return;}
+    setLookupLoading(true);setError("");setLookupDone(false);
+    const {data:found,error:lookupError}=await supabase.from("employees").select("*").eq("company_id",companyId).eq("cpf",normalized).maybeSingle();
+    setLookupLoading(false);
+    if(lookupError){setError("Não foi possível consultar o CPF.");return;}
+    if(found){setEmployee(found as Employee);setLookupDone(true);return;}
+    setEmployee(null);setFunctionId("");setSelectedExamIds([]);setEmployeeFields({full_name:"",rg:"",birthplace:"",nationality:"",birth_date:"",sex:"not_informed",job_title:"",admission_date:"",workplace:""});setLookupDone(true);
+  }
+  function updateEmployeeField(key:keyof typeof employeeFields,value:string){setEmployeeFields(current=>({...current,[key]:value}));}
+
+  async function submit(e:FormEvent<HTMLFormElement>){
+    e.preventDefault();setError("");
+    if(!companyId){setError("Selecione a empresa.");return;}if(!lookupDone){setError("Consulte o CPF antes de continuar.");return;}if(!selectedClinic){setError("Selecione uma clínica habilitada para a empresa.");return;}
+    const slot=slots.find(item=>item.key===slotKey);if(!slot){setError("Selecione um horário disponível.");return;}if(!functionId){setError("Selecione a função ocupacional.");return;}
+    let employeeId=employee?.id??"";let examIds=employee?(employeeExamIds[employee.id]??[]):selectedExamIds;
+    if(!employee){
+      const normalizedCpf=cpf.replace(/\D/g,"");const user=(await supabase.auth.getUser()).data.user;
+      if(normalizedCpf.length!==11||!user){setError("Informe um CPF válido e verifique sua sessão.");return;}
+      const values={company_id:companyId,full_name:employeeFields.full_name.trim(),cpf:normalizedCpf,rg:employeeFields.rg.trim()||null,birthplace:employeeFields.birthplace.trim(),nationality:employeeFields.nationality.trim(),birth_date:employeeFields.birth_date,sex:employeeFields.sex,job_title:employeeFields.job_title.trim(),occupational_function_id:functionId,admission_date:employeeFields.admission_date.trim()||null,workplace:employeeFields.workplace.trim(),created_by:user.id};
+      if(values.full_name.length<2||!values.birthplace||!values.nationality||!values.birth_date||!values.job_title||!values.workplace){setError("Preencha todos os dados obrigatórios do funcionário.");return;}
+      const {data:createdEmployee,error:employeeError}=await supabase.from("employees").insert(values).select("*").single();
+      if(employeeError||!createdEmployee){setError(employeeError?.message??"Não foi possível cadastrar o funcionário.");return;}
+      employeeId=createdEmployee.id;
+      if(selectedExamIds.length){const {error:examError}=await supabase.from("employee_exams").insert(selectedExamIds.map(exam_id=>({employee_id:employeeId,exam_id})));if(examError){await supabase.from("employees").delete().eq("id",employeeId);setError(examError.message);return;}}
+      examIds=selectedExamIds;
+    }
+    if(!examIds.length){setError("Este funcionário não possui exames cadastrados.");return;}
+    try{await runCreateAppointment({data:{employeeId,companyId,clinicId:clinicId,startsAt:slot.startsAt,endsAt:slot.endsAt,assessmentType:assessmentType as "admission"|"periodic"|"return_to_work"|"risk_change"|"dismissal",jobTitle:employeeFields.job_title.trim(),examIds,notes:String(new FormData(e.currentTarget).get("notes")??"").trim()||null}});onSaved();}catch(saveError){setError(saveError instanceof Error?saveError.message:"Não foi possível criar o agendamento.");}
+  }
+
+  return <DialogFrame open={open} onClose={onClose} onSubmit={submit} title="Novo agendamento" description="Consulte o funcionário pelo CPF, confirme os dados, selecione a clínica da empresa e o horário.">
+    <div className="space-y-5">
+      <div className="grid gap-4 sm:grid-cols-[1fr_auto]"><div className="space-y-2"><Label htmlFor="appointment-cpf">CPF do funcionário</Label><Input id="appointment-cpf" value={cpf} onChange={event=>setCpf(event.target.value)} inputMode="numeric" maxLength={14} placeholder="000.000.000-00"/></div><Button type="button" variant="outline" className="mt-8" onClick={()=>void lookupEmployee()} disabled={lookupLoading}>{lookupLoading?"Consultando...":"Consultar CPF"}</Button></div>
+      {lookupDone&&<p className="text-sm text-muted-foreground">{employee?"Funcionário encontrado. Confira os dados antes de confirmar.":"CPF não encontrado. Preencha os dados para cadastrar o novo funcionário."}</p>}
+      {isMaster&&<div className="space-y-2"><Label>Empresa</Label><Select value={companyId} onValueChange={value=>{setCompanyId(value);setCpf("");setEmployee(null);setLookupDone(false);setClinicId("");setSlotKey("");}}><SelectTrigger><SelectValue placeholder="Selecionar empresa"/></SelectTrigger><SelectContent>{companies.filter(item=>item.status==="approved").map(item=><SelectItem key={item.id} value={item.id}>{item.trade_name||item.legal_name}</SelectItem>)}</SelectContent></Select></div>}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2"><Label>Nome completo</Label><Input value={employeeFields.full_name} readOnly={Boolean(employee)} onChange={event=>updateEmployeeField("full_name",event.target.value)} required/></div>
+        <div className="space-y-2"><Label>RG</Label><Input value={employeeFields.rg} readOnly={Boolean(employee)} onChange={event=>updateEmployeeField("rg",event.target.value)}/></div>
+        <div className="space-y-2"><Label>Naturalidade</Label><Input value={employeeFields.birthplace} readOnly={Boolean(employee)} onChange={event=>updateEmployeeField("birthplace",event.target.value)} required/></div>
+        <div className="space-y-2"><Label>Nacionalidade</Label><Input value={employeeFields.nationality} readOnly={Boolean(employee)} onChange={event=>updateEmployeeField("nationality",event.target.value)} required/></div>
+        <div className="space-y-2"><Label>Data de nascimento</Label><Input type="date" value={employeeFields.birth_date} readOnly={Boolean(employee)} onChange={event=>updateEmployeeField("birth_date",event.target.value)} required/></div>
+        <div className="space-y-2"><Label>Sexo</Label><Select value={employeeFields.sex} onValueChange={value=>updateEmployeeField("sex",value)} disabled={Boolean(employee)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="female">Feminino</SelectItem><SelectItem value="male">Masculino</SelectItem><SelectItem value="other">Outro</SelectItem><SelectItem value="not_informed">Não informado</SelectItem></SelectContent></Select></div>
+        <div className="space-y-2"><Label>Função</Label><Input value={employeeFields.job_title} readOnly={Boolean(employee)} onChange={event=>updateEmployeeField("job_title",event.target.value)} required/></div>
+        <div className="space-y-2"><Label>Data de admissão</Label><Input type="date" value={employeeFields.admission_date} readOnly={Boolean(employee)} onChange={event=>updateEmployeeField("admission_date",event.target.value)}/></div>
+        <div className="space-y-2 sm:col-span-2"><Label>Posto de trabalho</Label><Input value={employeeFields.workplace} readOnly={Boolean(employee)} onChange={event=>updateEmployeeField("workplace",event.target.value)} required/></div>
+        <div className="space-y-2 sm:col-span-2"><Label>Função ocupacional cadastrada</Label><Select value={functionId} onValueChange={setFunctionId} disabled={Boolean(employee)}><SelectTrigger><SelectValue placeholder="Selecionar função"/></SelectTrigger><SelectContent>{functions.filter(item=>item.is_active&&item.company_id===companyId).map(item=><SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></div>
+      </div>
+      <div className="space-y-3 border-t pt-5"><div><p className="font-semibold">Exames a realizar</p><p className="text-sm text-muted-foreground">{employee?"Exames já cadastrados para este funcionário foram carregados automaticamente.":"A função selecionada sugere os exames cadastrados para a função; eles serão vinculados ao funcionário."}</p></div>{!availableExams.length?<p className="rounded-md border p-3 text-sm text-muted-foreground">Nenhum exame cadastrado para este funcionário/função.</p>:<div className="grid gap-2 sm:grid-cols-2">{availableExams.map(exam=><label key={exam.id} className="flex items-center gap-3 rounded-md border p-3"><Checkbox checked={selectedExamIds.includes(exam.id)} disabled={Boolean(employee)} onCheckedChange={()=>setSelectedExamIds(current=>current.includes(exam.id)?current.filter(id=>id!==exam.id):[...current,exam.id])}/><span className="text-sm">{exam.name_pt}</span></label>)}</div>}</div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2"><Label>Tipo ocupacional</Label><Select value={assessmentType} onValueChange={setAssessmentType}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="admission">Admissional</SelectItem><SelectItem value="periodic">Periódico</SelectItem><SelectItem value="return_to_work">Retorno ao trabalho</SelectItem><SelectItem value="risk_change">Mudança de risco</SelectItem><SelectItem value="dismissal">Demissional</SelectItem></SelectContent></Select></div>
+        <div className="space-y-2"><Label>Clínica de atendimento</Label><Select value={clinicId} onValueChange={value=>{setClinicId(value);setSlotKey("");}}><SelectTrigger><SelectValue placeholder="Selecionar clínica"/></SelectTrigger><SelectContent>{availableClinics.map(item=><SelectItem key={item.id} value={item.id}>{item.name} · {item.city}/{item.state}</SelectItem>)}</SelectContent></Select></div>
+        <div className="space-y-2 sm:col-span-2"><Label>Horário disponível</Label><Select value={slotKey} onValueChange={setSlotKey} disabled={!clinicId}><SelectTrigger><SelectValue placeholder={clinicId?"Selecionar horário":"Selecione primeiro a clínica"}/></SelectTrigger><SelectContent>{slots.map(slot=><SelectItem key={slot.key} value={slot.key}>{slot.label}</SelectItem>)}</SelectContent></Select></div>
+        <div className="space-y-2 sm:col-span-2"><Label htmlFor="appointment-notes">Observações</Label><Textarea id="appointment-notes" name="notes" maxLength={2000}/></div>
+      </div>
+      {error&&<p className="text-sm text-destructive">{error}</p>}
+    </div>
+  </DialogFrame>;
+}
 function JoinDialog({open,onClose,onSaved}:{open:boolean;onClose:()=>void;onSaved:()=>void}){const [error,setError]=useState("");async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();const f=new FormData(e.currentTarget);const {error:joinError}=await supabase.rpc("join_company_with_code",{_plain_code:String(f.get("code"))});if(joinError)setError("Código inválido, expirado ou empresa ainda não aprovada.");else onSaved();}return <DialogFrame open={open} onClose={onClose} onSubmit={submit} title="Vincular à empresa" description="Insira o código de acesso fornecido pelo administrador."><Field label="Código da empresa" name="code"/>{error&&<p className="text-sm text-destructive">{error}</p>}</DialogFrame>}
 function formatCnpj(v:string){return v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")}
 function formatCpf(v:string){return v.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4")}
