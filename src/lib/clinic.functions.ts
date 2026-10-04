@@ -109,7 +109,7 @@ export const loadClinicsForCurrentUser = createServerFn({ method: "GET" })
 
     const [{ data: locations, error: locationsError }, { data: schedules, error: schedulesError }] = await Promise.all([
       supabaseAdmin.from("exam_locations").select("*").in("id", locationIds).eq("is_active", true).order("name"),
-      supabase.from("exam_location_schedule_rules").select("id,location_id,weekday,start_time,end_time,slot_minutes,is_active").in("location_id", locationIds).eq("is_active", true).order("weekday").order("start_time"),
+      supabaseAdmin.from("exam_location_schedule_rules").select("id,location_id,weekday,start_time,end_time,slot_minutes,is_active").in("location_id", locationIds).eq("is_active", true).order("weekday").order("start_time"),
     ]);
 
     if (locationsError) throw locationsError;
