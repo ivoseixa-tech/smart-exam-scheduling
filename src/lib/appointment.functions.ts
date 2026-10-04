@@ -2,8 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 
-const CLINIC_API_URL = "https://br-royal-forest-b469fwmo-clinicapi.compute.c-6.us-east-2.aws.neon.tech/";
-
 const appointmentInput = z.object({
   employeeId: z.string().uuid(),
   companyId: z.string().uuid(),
@@ -24,30 +22,35 @@ type Clinic = {
   schedule_rules?: { weekday: number; start_time: string; end_time: string; slot_minutes: number; is_active: boolean }[];
 };
 
-async function getClinicsFromNeon(authorization: string): Promise<Clinic[]> {
-  const supabaseUrl = process.env["SUPABASE_URL"];
-  const supabasePublishableKey = process.env["SUPABASE_PUBLISHABLE_KEY"];
-  if (!supabaseUrl || !supabasePublishableKey) {
-    throw new Error("Configuração do Supabase não disponível no servidor da aplicação.");
-  }
+async function getClinicsFromSupabase(supabaseAdmin: any, companyId: string): Promise<Clinic[]> {
+  const { data: links, error: linkError } = await supabaseAdmin
+    .from("exam_location_companies")
+    .select("location_id,company_id")
+    .eq("company_id", companyId);
+  if (linkError) throw linkError;
+  const locationIds = Array.from(new Set((links ?? []).map((row: { location_id: string }) => row.location_id)));
+  if (!locationIds.length) return [];
 
-  const response = await fetch(CLINIC_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: authorization,
-      "X-Supabase-URL": supabaseUrl,
-      "X-Supabase-Publishable-Key": supabasePublishableKey,
-    },
-    body: JSON.stringify({ action: "list" }),
-  });
+  const [{ data: locations, error: locationError }, { data: schedules, error: scheduleError }] = await Promise.all([
+    supabaseAdmin
+      .from("exam_locations")
+      .select("id,name,is_active")
+      .in("id", locationIds)
+      .eq("is_active", true),
+    supabaseAdmin
+      .from("exam_location_schedule_rules")
+      .select("id,location_id,weekday,start_time,end_time,slot_minutes,is_active")
+      .in("location_id", locationIds)
+      .eq("is_active", true),
+  ]);
+  if (locationError) throw locationError;
+  if (scheduleError) throw scheduleError;
 
-  const body = await response.json().catch(() => null) as { ok?: boolean; data?: unknown; error?: string } | null;
-  if (!response.ok || body?.ok === false) {
-    throw new Error(body?.error || "Não foi possível consultar as clínicas.");
-  }
-
-  return Array.isArray(body?.data) ? body.data as Clinic[] : [];
+  return (locations ?? []).map((location: { id: string; name: string; is_active: boolean }) => ({
+    ...location,
+    companies: (links ?? []).filter((link: { location_id: string }) => link.location_id === location.id),
+    schedule_rules: (schedules ?? []).filter((rule: { location_id: string }) => rule.location_id === location.id),
+  })) as Clinic[];
 }
 
 function safeError(error: unknown, fallback: string) {
@@ -88,7 +91,7 @@ export const createAppointmentFromClinic = createServerFn({ method: "POST" })
       if (employeeError) throw employeeError;
       if (!employee?.is_active || employee.company_id !== data.companyId) throw new Error("Funcionário indisponível.");
 
-      const clinics = await getClinicsFromNeon(authorization);
+      const clinics = await getClinicsFromSupabase(supabaseAdmin, data.companyId);
       const clinic = clinics.find((item) =>
         item.id === data.clinicId &&
         item.is_active &&
@@ -143,8 +146,8 @@ export const createAppointmentFromClinic = createServerFn({ method: "POST" })
       const { data: conflicts, error: conflictError } = await supabaseAdmin
         .from("appointments")
         .select("id")
-        .eq("company_id", data.companyId)
-        .eq("location", clinic.name)
+         .eq("company_id", data.companyId)
+        .eq("location_id", clinic.id)
         .neq("status", "cancelled")
         .lt("starts_at", data.endsAt)
         .gt("ends_at", data.startsAt)
@@ -162,7 +165,7 @@ export const createAppointmentFromClinic = createServerFn({ method: "POST" })
           starts_at: data.startsAt,
           ends_at: data.endsAt,
           location: clinic.name,
-          location_id: null,
+          location_id: clinic.id,
           slot_id: null,
           notes: data.notes?.trim() || null,
           created_by: authData.user.id,
