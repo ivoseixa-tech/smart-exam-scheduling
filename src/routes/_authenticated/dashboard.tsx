@@ -258,6 +258,7 @@ function ExamDialog({open,onClose,onSaved}:{open:boolean;onClose:()=>void;onSave
 function ClinicDialog({open,onClose,onSaved,companies,language,clinic}:{open:boolean;onClose:()=>void;onSaved:()=>void;companies:Company[];language:"pt"|"en";clinic:(ExamLocation & {companies:LocationCompany[];schedule_rules:LocationScheduleRule[]})|null}) {
   const days=useMemo(()=>language==="pt"?["Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado"]:["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],[language]);
   const [error,setError]=useState("");
+  const runSaveClinic=useServerFn(saveClinicFromMaster);
   const [selectedCompanies,setSelectedCompanies]=useState<string[]>([]);
   const [schedule,setSchedule]=useState(days.map((_,weekday)=>({weekday,enabled:weekday>=1&&weekday<=5,start_time:"08:00",end_time:"17:00",slot_minutes:30})));
   useEffect(()=>{if(open){setError("");setSelectedCompanies(clinic?.companies?.map(x=>x.company_id)??[]);const rules=clinic?.schedule_rules??[];setSchedule(days.map((_,weekday)=>{const rule=rules.find(x=>x.weekday===weekday);return {weekday,enabled:Boolean(rule),start_time:String(rule?.start_time??"08:00").slice(0,5),end_time:String(rule?.end_time??"17:00").slice(0,5),slot_minutes:Number(rule?.slot_minutes??30)}}));}},[open,language,clinic,days]);
