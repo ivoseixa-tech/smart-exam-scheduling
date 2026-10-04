@@ -8,7 +8,6 @@ import { useI18n } from "@/lib/i18n";
 import { lookupCnpj } from "@/lib/cnpj.functions";
 import { createCompanyAgendaUser } from "@/lib/admin-users.functions";
 import { createAppointmentFromClinic } from "@/lib/appointment.functions";
-import { createClinicWithSchedule, deleteClinic, listClinics, updateClinicWithSchedule } from "@/lib/clinic.functions";
 import { UserManagement } from "@/components/UserManagement";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,7 +48,6 @@ function DashboardPage() {
   const [employees,setEmployees]=useState<Employee[]>([]); const [exams,setExams]=useState<Exam[]>([]); const [appointments,setAppointments]=useState<Appointment[]>([]);
   const [functions,setFunctions]=useState<OccupationalFunction[]>([]); const [locations,setLocations]=useState<ExamLocation[]>([]); const [slots,setSlots]=useState<AvailabilitySlot[]>([]); const [locationCompanies,setLocationCompanies]=useState<LocationCompany[]>([]); const [locationSchedules,setLocationSchedules]=useState<LocationScheduleRule[]>([]); const [notifications,setNotifications]=useState<Notification[]>([]);
   const [employeeExamIds,setEmployeeExamIds]=useState<Record<string,string[]>>({});
-  const runListClinics=useServerFn(listClinics);
   const [dialog,setDialog]=useState<"company"|"employee"|"exam"|"function"|"location"|"slot"|"appointment"|"join"|"agendaAccess"|null>(null); const [selectedCompany,setSelectedCompany]=useState<Company|null>(null); const [selectedEmployee,setSelectedEmployee]=useState<Employee|null>(null); const [selectedClinic,setSelectedClinic]=useState<(ExamLocation & {companies:LocationCompany[];schedule_rules:LocationScheduleRule[]})|null>(null); const [query,setQuery]=useState(""); const [notice,setNotice]=useState("");
 
   async function load() {
