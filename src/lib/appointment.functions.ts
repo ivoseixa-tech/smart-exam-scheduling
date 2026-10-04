@@ -22,7 +22,9 @@ type Clinic = {
   schedule_rules?: { weekday: number; start_time: string; end_time: string; slot_minutes: number; is_active: boolean }[];
 };
 
-async function getClinicsFromSupabase(supabaseAdmin: any, companyId: string): Promise<Clinic[]> {
+type SupabaseAdminClient = typeof import("@/integrations/supabase/client.server").supabaseAdmin;
+
+async function getClinicsFromSupabase(supabaseAdmin: SupabaseAdminClient, companyId: string): Promise<Clinic[]> {
   const { data: links, error: linkError } = await supabaseAdmin
     .from("exam_location_companies")
     .select("location_id,company_id")
