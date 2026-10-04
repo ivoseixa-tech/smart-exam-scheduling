@@ -66,15 +66,19 @@ function DashboardPage() {
     ]);
     const master=Boolean(roles?.some(r=>r.role==="master"));
     setIsMaster(master); setCompanies((companyRows??[]) as Company[]); setEmployees((employeeRows??[]) as Employee[]); setExams((examRows??[]) as Exam[]); setAppointments((appointmentRows??[]) as Appointment[]); setFunctions((functionRows??[]) as OccupationalFunction[]); setSlots((slotRows??[]) as AvailabilitySlot[]); setNotifications(notificationRows??[]); setEmployeeExamIds((employeeExamRows??[]).reduce<Record<string,string[]>>((all,row)=>({...all,[row.employee_id]:[...(all[row.employee_id]??[]),row.exam_id]}),{}));
-    try {
-      const clinicRows=await runListClinics();
-      const clinicList=clinicRows as unknown as (ExamLocation & {companies:LocationCompany[];schedule_rules:LocationScheduleRule[]})[];
-      setLocations(clinicList);
-      setLocationCompanies(clinicList.flatMap(row=>row.companies??[]));
-      setLocationSchedules(clinicList.flatMap(row=>row.schedule_rules??[]));
-    } catch {
-      setLocations([]); setLocationCompanies([]); setLocationSchedules([]);
-    }
+    const [{data:clinicRows},{data:clinicCompanyRows},{data:clinicScheduleRows}]=await Promise.all([
+      supabase.from("exam_locations").select("*").eq("is_active",true).order("name"),
+      supabase.from("exam_location_companies").select("location_id,company_id"),
+      supabase.from("exam_location_schedule_rules").select("id,location_id,weekday,start_time,end_time,slot_minutes,is_active").eq("is_active",true).order("weekday").order("start_time"),
+    ]);
+    const clinicList=(clinicRows??[]).map(row=>({
+      ...(row as ExamLocation),
+      companies:(clinicCompanyRows??[]).filter(link=>link.location_id===row.id) as LocationCompany[],
+      schedule_rules:(clinicScheduleRows??[]).filter(rule=>rule.location_id===row.id) as LocationScheduleRule[],
+    }));
+    setLocations(clinicList);
+    setLocationCompanies(clinicCompanyRows??[]);
+    setLocationSchedules(clinicScheduleRows??[]);
     setLoading(false);
   }
   useEffect(()=>{void load();},[]);
