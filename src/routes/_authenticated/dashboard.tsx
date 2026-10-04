@@ -284,7 +284,7 @@ function ClinicDialog({open,onClose,onSaved,companies,language,clinic}:{open:boo
       };
       let locationId=clinic?.id??"";
       if(clinic){
-        const {error:updateError}=await supabase.from("exam_locations").update({...locationPayload,created_by:clinic.id?undefined:userData.user.id,updated_at:new Date().toISOString()}).eq("id",clinic.id);
+        const {error:updateError}=await supabase.from("exam_locations").update({...locationPayload,created_by:undefined,updated_at:new Date().toISOString()}).eq("id",clinic.id);
         if(updateError) throw updateError;
         const {error:removeCompaniesError}=await supabase.from("exam_location_companies").delete().eq("location_id",clinic.id);
         if(removeCompaniesError) throw removeCompaniesError;
@@ -307,6 +307,7 @@ function ClinicDialog({open,onClose,onSaved,companies,language,clinic}:{open:boo
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Não foi possível cadastrar a clínica.");
     }
+  }
   const approved=companies.filter(c=>c.status==="approved");
   return <DialogFrame open={open} onClose={onClose} onSubmit={submit} title={clinic?(language==="pt"?"Editar clínica de atendimento":"Edit service clinic"):(language==="pt"?"Cadastrar clínica de atendimento":"Register service clinic")} description={clinic?(language==="pt"?"Atualize endereço, empresas habilitadas e agenda semanal.":"Update the address, enabled companies and weekly schedule."):(language==="pt"?"Cadastre endereço, empresas habilitadas e agenda semanal. Os horários serão gerados automaticamente.":"Register the address, enabled companies and weekly schedule.")}>
     <div className="grid gap-4 sm:grid-cols-2">
