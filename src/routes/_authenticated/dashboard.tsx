@@ -8,6 +8,7 @@ import { useI18n } from "@/lib/i18n";
 import { lookupCnpj } from "@/lib/cnpj.functions";
 import { createCompanyAgendaUser } from "@/lib/admin-users.functions";
 import { createAppointmentFromClinic } from "@/lib/appointment.functions";
+import { saveClinicFromMaster } from "@/lib/clinic.functions";
 import { UserManagement } from "@/components/UserManagement";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -275,16 +276,29 @@ function ClinicDialog({open,onClose,onSaved,companies,language,clinic}:{open:boo
       company_ids:selectedCompanies,schedule:active.map(day=>({weekday:day.weekday,start_time:day.start_time,end_time:day.end_time,slot_minutes:Number(day.slot_minutes)}))
     };
     try {
-      const {data:locationId,error:saveError}=await supabase.rpc("save_exam_location",{
-        p_location_id:clinic?.id??null,
-        p_data:{
-          name:data.name,street:data.street,number:data.number||null,complement:data.complement||null,
-          district:data.district||null,city:data.city,state:data.state,postal_code:data.postal_code||null,
-          phone:data.phone||null,company_ids:data.company_ids,schedule:data.schedule
-        }
+      const { data: sessionData, error:sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session?.access_token) {
+        throw new Error("Sessão expirada. Entre novamente no sistema.");
+      }
+      const { locationId } = await saveClinicFromMaster({
+        data: {
+          locationId: clinic?.id ?? null,
+          clinic: {
+            name: data.name,
+            street: data.street,
+            number: data.number || null,
+            complement: data.complement || null,
+            district: data.district || null,
+            city: data.city,
+            state: data.state,
+            postal_code: data.postal_code || null,
+            phone: data.phone || null,
+            company_ids: data.company_ids,
+            schedule: data.schedule,
+          },
+        },
       });
-      if(saveError) throw saveError;
-      if(!locationId) throw new Error("O banco não retornou o ID da clínica salva.");
+      if (!locationId) throw new Error("O banco não retornou o ID da clínica salva.");
       onSaved();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Não foi possível cadastrar a clínica.");
