@@ -445,6 +445,74 @@ export type Database = {
           },
         ]
       }
+      exam_location_companies: {
+        Row: {
+          company_id: string
+          location_id: string
+        }
+        Insert: {
+          company_id: string
+          location_id: string
+        }
+        Update: {
+          company_id?: string
+          location_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_location_companies_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_location_companies_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "exam_locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exam_location_schedule_rules: {
+        Row: {
+          end_time: string
+          id: string
+          is_active: boolean
+          location_id: string
+          slot_minutes: number
+          start_time: string
+          weekday: number
+        }
+        Insert: {
+          end_time: string
+          id?: string
+          is_active?: boolean
+          location_id: string
+          slot_minutes: number
+          start_time: string
+          weekday: number
+        }
+        Update: {
+          end_time?: string
+          id?: string
+          is_active?: boolean
+          location_id?: string
+          slot_minutes?: number
+          start_time?: string
+          weekday?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_location_schedule_rules_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "exam_locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exam_locations: {
         Row: {
           city: string
