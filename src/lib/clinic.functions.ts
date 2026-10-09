@@ -21,7 +21,8 @@ export type ClinicSaveData = {
 };
 
 export const saveClinicFromMaster = createServerFn({ method: "POST" })
-  .handler(async ({ data }: { data: { locationId: string | null; clinic: ClinicSaveData } }) => {
+  .inputValidator((data: { locationId: string | null; clinic: ClinicSaveData }) => data)
+  .handler(async ({ data }) => {
     const request = getRequest();
     const authorization = request?.headers?.get("authorization");
     if (!authorization?.startsWith("Bearer ")) {
