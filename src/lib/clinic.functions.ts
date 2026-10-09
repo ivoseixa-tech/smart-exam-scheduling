@@ -56,8 +56,8 @@ export const saveClinicFromMaster = createServerFn({ method: "POST" })
       throw new Error("Configure pelo menos um dia de atendimento.");
     }
 
-    const { data: locationId, error: saveError } = await supabaseAdmin.rpc("save_exam_location_for_user", {
-      p_location_id: data.locationId,
+    const { data: locationId, error: saveError } = await supabaseAdmin.rpc("save_clinic_for_user", {
+      ...(data.locationId ? { p_location_id: data.locationId } : {}),
       p_data: clinic,
       p_user_id: authData.user.id,
     });
