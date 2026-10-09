@@ -445,83 +445,6 @@ export type Database = {
           },
         ]
       }
-      exam_location_companies: {
-        Row: {
-          company_id: string
-          created_at: string
-          location_id: string
-        }
-        Insert: {
-          company_id: string
-          created_at?: string
-          location_id: string
-        }
-        Update: {
-          company_id?: string
-          created_at?: string
-          location_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "exam_location_companies_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "exam_location_companies_location_id_fkey"
-            columns: ["location_id"]
-            isOneToOne: false
-            referencedRelation: "exam_locations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      exam_location_schedule_rules: {
-        Row: {
-          created_at: string
-          end_time: string
-          id: string
-          is_active: boolean
-          location_id: string
-          slot_minutes: number
-          start_time: string
-          updated_at: string
-          weekday: number
-        }
-        Insert: {
-          created_at?: string
-          end_time: string
-          id?: string
-          is_active?: boolean
-          location_id: string
-          slot_minutes?: number
-          start_time: string
-          updated_at?: string
-          weekday: number
-        }
-        Update: {
-          created_at?: string
-          end_time?: string
-          id?: string
-          is_active?: boolean
-          location_id?: string
-          slot_minutes?: number
-          start_time?: string
-          updated_at?: string
-          weekday?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "exam_location_schedule_rules_location_id_fkey"
-            columns: ["location_id"]
-            isOneToOne: false
-            referencedRelation: "exam_locations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       exam_locations: {
         Row: {
           city: string
@@ -732,7 +655,6 @@ export type Database = {
       }
       profiles: {
         Row: {
-          agenda_login_code: string | null
           company_id: string | null
           created_at: string
           full_name: string
@@ -744,7 +666,6 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          agenda_login_code?: string | null
           company_id?: string | null
           created_at?: string
           full_name: string
@@ -756,7 +677,6 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          agenda_login_code?: string | null
           company_id?: string | null
           created_at?: string
           full_name?: string
@@ -825,10 +745,6 @@ export type Database = {
         Returns: string
       }
       current_company_id: { Args: never; Returns: string }
-      deactivate_exam_location: {
-        Args: { p_location_id: string }
-        Returns: boolean
-      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -841,14 +757,6 @@ export type Database = {
         Returns: Json
       }
       join_company_with_code: { Args: { _plain_code: string }; Returns: string }
-      save_exam_location: {
-        Args: { p_data: Json; p_location_id: string }
-        Returns: string
-      }
-      save_exam_location_for_user: {
-        Args: { p_data: Json; p_location_id: string; p_user_id: string }
-        Returns: string
-      }
     }
     Enums: {
       app_role: "master" | "company_user"
