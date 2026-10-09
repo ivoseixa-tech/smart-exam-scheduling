@@ -448,17 +448,14 @@ export type Database = {
       exam_location_companies: {
         Row: {
           company_id: string
-          created_at: string
           location_id: string
         }
         Insert: {
           company_id: string
-          created_at?: string
           location_id: string
         }
         Update: {
           company_id?: string
-          created_at?: string
           location_id?: string
         }
         Relationships: [
@@ -480,36 +477,30 @@ export type Database = {
       }
       exam_location_schedule_rules: {
         Row: {
-          created_at: string
           end_time: string
           id: string
           is_active: boolean
           location_id: string
           slot_minutes: number
           start_time: string
-          updated_at: string
           weekday: number
         }
         Insert: {
-          created_at?: string
           end_time: string
           id?: string
           is_active?: boolean
           location_id: string
-          slot_minutes?: number
+          slot_minutes: number
           start_time: string
-          updated_at?: string
           weekday: number
         }
         Update: {
-          created_at?: string
           end_time?: string
           id?: string
           is_active?: boolean
           location_id?: string
           slot_minutes?: number
           start_time?: string
-          updated_at?: string
           weekday?: number
         }
         Relationships: [
@@ -732,7 +723,6 @@ export type Database = {
       }
       profiles: {
         Row: {
-          agenda_login_code: string | null
           company_id: string | null
           created_at: string
           full_name: string
@@ -744,7 +734,6 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          agenda_login_code?: string | null
           company_id?: string | null
           created_at?: string
           full_name: string
@@ -756,7 +745,6 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          agenda_login_code?: string | null
           company_id?: string | null
           created_at?: string
           full_name?: string
@@ -841,8 +829,8 @@ export type Database = {
         Returns: Json
       }
       join_company_with_code: { Args: { _plain_code: string }; Returns: string }
-      save_exam_location: {
-        Args: { p_data: Json; p_location_id: string }
+      save_clinic_for_user: {
+        Args: { p_data: Json; p_location_id?: string; p_user_id: string }
         Returns: string
       }
       save_exam_location_for_user: {

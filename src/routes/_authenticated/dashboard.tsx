@@ -31,6 +31,7 @@ type ExamLocation = { id:string; name:string; street:string; number:string|null;
 type AvailabilitySlot = { id:string; location_id:string; starts_at:string; ends_at:string; is_active:boolean; exam_locations?:{name:string}|null };
 type LocationCompany = { location_id:string; company_id:string };
 type LocationScheduleRule = { id:string; location_id:string; weekday:number; start_time:string; end_time:string; slot_minutes:number; is_active:boolean };
+type Clinic = ExamLocation & { companies:LocationCompany[]; schedule_rules:LocationScheduleRule[] };
 type Notification = { id:string; appointment_id:string|null; is_read:boolean; created_at:string };
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -47,7 +48,7 @@ function DashboardPage() {
   const [section,setSection]=useState<Section>("dashboard"); const [mobile,setMobile]=useState(false); const [loading,setLoading]=useState(true);
   const [profile,setProfile]=useState<Profile|null>(null); const [isMaster,setIsMaster]=useState(false); const [companies,setCompanies]=useState<Company[]>([]);
   const [employees,setEmployees]=useState<Employee[]>([]); const [exams,setExams]=useState<Exam[]>([]); const [appointments,setAppointments]=useState<Appointment[]>([]);
-  const [functions,setFunctions]=useState<OccupationalFunction[]>([]); const [locations,setLocations]=useState<ExamLocation[]>([]); const [slots,setSlots]=useState<AvailabilitySlot[]>([]); const [locationCompanies,setLocationCompanies]=useState<LocationCompany[]>([]); const [locationSchedules,setLocationSchedules]=useState<LocationScheduleRule[]>([]); const [notifications,setNotifications]=useState<Notification[]>([]);
+  const [functions,setFunctions]=useState<OccupationalFunction[]>([]); const [locations,setLocations]=useState<Clinic[]>([]); const [slots,setSlots]=useState<AvailabilitySlot[]>([]); const [locationCompanies,setLocationCompanies]=useState<LocationCompany[]>([]); const [locationSchedules,setLocationSchedules]=useState<LocationScheduleRule[]>([]); const [notifications,setNotifications]=useState<Notification[]>([]);
   const [employeeExamIds,setEmployeeExamIds]=useState<Record<string,string[]>>({});
   const [dialog,setDialog]=useState<"company"|"employee"|"exam"|"function"|"location"|"slot"|"appointment"|"join"|"agendaAccess"|null>(null); const [selectedCompany,setSelectedCompany]=useState<Company|null>(null); const [selectedEmployee,setSelectedEmployee]=useState<Employee|null>(null); const [selectedClinic,setSelectedClinic]=useState<(ExamLocation & {companies:LocationCompany[];schedule_rules:LocationScheduleRule[]})|null>(null); const [query,setQuery]=useState(""); const [notice,setNotice]=useState("");
 
@@ -194,7 +195,7 @@ function EmployeeDialog({open,onClose,onSaved,employee,employeeExamIds,companyId
     if(cpf.length!==11){setError(language==="pt"?"Informe os 11 dígitos do CPF.":"Enter all 11 CPF digits.");return;}
     const {data:user}=await supabase.auth.getUser();
     if(!user.user){setError("Sessão expirada.");return;}
-    const row: Database["public"]["Tables"]["employees"]["Update"]={
+    const row={
       company_id:effectiveCompanyId,
       full_name:String(f.get("full_name")??"").trim(),
       cpf,
@@ -358,8 +359,7 @@ function AppointmentDialog({open,onClose,onSaved,employees,exams,profile,compani
   const availableClinics=locations.filter(item=>{
     if(!item.is_active||!companyId)return false;
     const linkedFromClinic=(item.companies??[]).some(link=>link.company_id===companyId);
-    const linkedFromState=locationCompanies.some(link=>link.location_id===item.id&&link.company_id===companyId);
-    return linkedFromClinic||linkedFromState;
+    return linkedFromClinic;
   });
   const employeeExamIdList=employee?(employeeExamIds[employee.id]??[]):[];
   const functionExamIdList=selectedFunction?.occupational_function_exams?.map(item=>item.exam_id)??[];
@@ -385,7 +385,8 @@ function AppointmentDialog({open,onClose,onSaved,employees,exams,profile,compani
   useEffect(()=>{
     if(!open||!isMaster||companyId)return;
     const approved=companies.filter(item=>item.status==="approved");
-    if(approved.length===1)setCompanyId(approved[0].id);
+    const onlyCompany=approved.length===1?approved[0]:undefined;
+    if(onlyCompany)setCompanyId(onlyCompany.id);
   },[open,isMaster,companyId,companies]);
   useEffect(()=>{if(employee){setFunctionId(employee.occupational_function_id??"");setEmployeeFields({full_name:employee.full_name,rg:employee.rg??"",birthplace:employee.birthplace,nationality:employee.nationality,birth_date:employee.birth_date,sex:employee.sex,job_title:employee.job_title,admission_date:employee.admission_date??"",workplace:employee.workplace});setSelectedExamIds(employeeExamIds[employee.id]??[]);}},[employee,employeeExamIds]);
   useEffect(()=>{if(functionId&&!employee)setSelectedExamIds(selectedFunction?.occupational_function_exams?.map(item=>item.exam_id)??[]);},[functionId,employee,selectedFunction]);
@@ -397,6 +398,7 @@ function AppointmentDialog({open,onClose,onSaved,employees,exams,profile,compani
       const date=new Date();date.setHours(0,0,0,0);date.setDate(date.getDate()+offset);const weekday=date.getDay();
       for(const rule of rules.filter(item=>item.is_active&&item.weekday===weekday)){
         const [sh,sm]=String(rule.start_time).slice(0,5).split(":").map(Number);const [eh,em]=String(rule.end_time).slice(0,5).split(":").map(Number);
+        if(sh===undefined||sm===undefined||eh===undefined||em===undefined)continue;
         for(let minute=sh*60+sm;minute+Number(rule.slot_minutes)<=eh*60+em;minute+=Number(rule.slot_minutes)){
           const startDate=new Date(date);startDate.setHours(Math.floor(minute/60),minute%60,0,0);const endDate=new Date(startDate.getTime()+Number(rule.slot_minutes)*60000);
           if(startDate.getTime()<=now)continue;

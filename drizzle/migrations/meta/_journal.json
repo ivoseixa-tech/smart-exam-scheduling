@@ -57,6 +57,27 @@
       "when": 1790986643092,
       "tag": "0007_controlled_scheduling_and_exam_defaults",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791556248383,
+      "tag": "0008_restore_clinic_schedule_dependencies",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791556278164,
+      "tag": "0009_repair_save_exam_location_for_user_rpc",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791556315940,
+      "tag": "0010_restore_clinic_application_rpcs",
+      "breakpoints": true
     }
   ]
 }

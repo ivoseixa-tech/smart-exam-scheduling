@@ -1,0 +1,10 @@
+CREATE TABLE public.exam_location_companies (location_id uuid NOT NULL REFERENCES public.exam_locations(id), company_id uuid NOT NULL REFERENCES public.companies(id), PRIMARY KEY(location_id,company_id));
+GRANT SELECT ON public.exam_location_companies TO authenticated;
+GRANT ALL ON public.exam_location_companies TO service_role;
+ALTER TABLE public.exam_location_companies ENABLE ROW LEVEL SECURITY;
+CREATE POLICY clinic_company_read ON public.exam_location_companies FOR SELECT TO authenticated USING (public.has_role(auth.uid(),'master') OR company_id=public.current_company_id());
+CREATE TABLE public.exam_location_schedule_rules (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), location_id uuid NOT NULL REFERENCES public.exam_locations(id), weekday smallint NOT NULL CHECK(weekday BETWEEN 0 AND 6), start_time time NOT NULL, end_time time NOT NULL, slot_minutes integer NOT NULL CHECK(slot_minutes BETWEEN 5 AND 240), is_active boolean NOT NULL DEFAULT true, CHECK(end_time>start_time));
+GRANT SELECT ON public.exam_location_schedule_rules TO authenticated;
+GRANT ALL ON public.exam_location_schedule_rules TO service_role;
+ALTER TABLE public.exam_location_schedule_rules ENABLE ROW LEVEL SECURITY;
+CREATE POLICY clinic_schedule_read ON public.exam_location_schedule_rules FOR SELECT TO authenticated USING (public.has_role(auth.uid(),'master') OR EXISTS(SELECT 1 FROM public.exam_location_companies c WHERE c.location_id=exam_location_schedule_rules.location_id AND c.company_id=public.current_company_id()));

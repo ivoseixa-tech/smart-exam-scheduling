@@ -88,7 +88,7 @@ export const createCompanyAgendaUser = createServerFn({ method: "POST" })
     try {
       const { error: profileError } = await supabaseAdmin.from("profiles").insert({
         id: created.user.id, company_id: data.companyId, full_name: data.fullName,
-        preferred_language: "pt", is_active: true, agenda_login_code: loginCode,
+        preferred_language: "pt", is_active: true,
       });
       if (profileError) throw profileError;
       const { error: roleError2 } = await supabaseAdmin.from("user_roles").insert({ user_id: created.user.id, role: "company_user" });

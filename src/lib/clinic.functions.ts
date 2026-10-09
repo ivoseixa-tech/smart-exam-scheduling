@@ -21,7 +21,8 @@ export type ClinicSaveData = {
 };
 
 export const saveClinicFromMaster = createServerFn({ method: "POST" })
-  .handler(async ({ data }: { data: { locationId: string | null; clinic: ClinicSaveData } }) => {
+  .inputValidator((data: { locationId: string | null; clinic: ClinicSaveData }) => data)
+  .handler(async ({ data }) => {
     const request = getRequest();
     const authorization = request?.headers?.get("authorization");
     if (!authorization?.startsWith("Bearer ")) {
@@ -55,8 +56,8 @@ export const saveClinicFromMaster = createServerFn({ method: "POST" })
       throw new Error("Configure pelo menos um dia de atendimento.");
     }
 
-    const { data: locationId, error: saveError } = await supabaseAdmin.rpc("save_exam_location_for_user", {
-      p_location_id: data.locationId,
+    const { data: locationId, error: saveError } = await supabaseAdmin.rpc("save_clinic_for_user", {
+      ...(data.locationId ? { p_location_id: data.locationId } : {}),
       p_data: clinic,
       p_user_id: authData.user.id,
     });
