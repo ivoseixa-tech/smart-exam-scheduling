@@ -71,6 +71,13 @@
       "when": 1791556278164,
       "tag": "0009_repair_save_exam_location_for_user_rpc",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791556315940,
+      "tag": "0010_restore_clinic_application_rpcs",
+      "breakpoints": true
     }
   ]
 }

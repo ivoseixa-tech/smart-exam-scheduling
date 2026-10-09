@@ -813,6 +813,10 @@ export type Database = {
         Returns: string
       }
       current_company_id: { Args: never; Returns: string }
+      deactivate_exam_location: {
+        Args: { p_location_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -825,6 +829,10 @@ export type Database = {
         Returns: Json
       }
       join_company_with_code: { Args: { _plain_code: string }; Returns: string }
+      save_clinic_for_user: {
+        Args: { p_data: Json; p_location_id?: string; p_user_id: string }
+        Returns: string
+      }
       save_exam_location_for_user: {
         Args: { p_data: Json; p_location_id: string; p_user_id: string }
         Returns: string
