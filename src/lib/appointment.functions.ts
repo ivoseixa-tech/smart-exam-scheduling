@@ -138,11 +138,20 @@ export const createAppointmentFromClinic = createServerFn({ method: "POST" })
         functionExamSet = new Set((functionExams ?? []).map((row) => row.exam_id));
       }
 
-      const unauthorizedExam = data.examIds.some(
-        (examId) => !employeeExamSet.has(examId) && !functionExamSet.has(examId),
+      const [{ data: companyAvailable, error: availableError }, { data: companySettings, error: settingsError }] = await Promise.all([
+        supabaseAdmin.from("exams").select("id").in("id", data.examIds).eq("is_active", true).eq("available_to_companies", true),
+        supabaseAdmin.from("company_exam_settings").select("exam_id,enabled").eq("company_id", data.companyId).in("exam_id", data.examIds),
+      ]);
+      if (availableError) throw availableError;
+      if (settingsError) throw settingsError;
+      const disabledSet = new Set((companySettings ?? []).filter((row) => !row.enabled).map((row) => row.exam_id));
+      const companyExamSet = new Set((companyAvailable ?? []).map((row) => row.id).filter((id) => !disabledSet.has(id)));
+
+      const unauthorizedExam = !isMaster && data.examIds.some(
+        (examId) => !employeeExamSet.has(examId) && !functionExamSet.has(examId) && !companyExamSet.has(examId),
       );
       if (unauthorizedExam) {
-        throw new Error("Um ou mais exames não estão cadastrados para este funcionário ou para sua função.");
+        throw new Error("Um ou mais exames não estão habilitados para esta empresa.");
       }
 
       const { data: conflicts, error: conflictError } = await supabaseAdmin

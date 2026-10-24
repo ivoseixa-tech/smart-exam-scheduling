@@ -340,6 +340,42 @@ export type Database = {
           },
         ]
       }
+      company_exam_settings: {
+        Row: {
+          company_id: string
+          enabled: boolean
+          exam_id: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          enabled?: boolean
+          exam_id: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          enabled?: boolean
+          exam_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_exam_settings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_exam_settings_exam_id_fkey"
+            columns: ["exam_id"]
+            isOneToOne: false
+            referencedRelation: "exams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_exams: {
         Row: {
           employee_id: string
@@ -572,6 +608,7 @@ export type Database = {
       }
       exams: {
         Row: {
+          available_to_companies: boolean
           category: Database["public"]["Enums"]["exam_category"]
           created_at: string
           created_by: string | null
@@ -587,6 +624,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          available_to_companies?: boolean
           category: Database["public"]["Enums"]["exam_category"]
           created_at?: string
           created_by?: string | null
@@ -602,6 +640,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          available_to_companies?: boolean
           category?: Database["public"]["Enums"]["exam_category"]
           created_at?: string
           created_by?: string | null
