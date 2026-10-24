@@ -431,7 +431,7 @@ function AppointmentDialog({open,onClose,onSaved,employees,exams,profile,compani
   async function lookupEmployee(value?:string){
     const normalized=(value??cpf).replace(/\D/g,"");if(normalized.length!==11){setError("Informe os 11 dígitos do CPF.");return;}
     setLookupLoading(true);setError("");setLookupDone(false);
-    let request=supabase.from("employees").select("*").eq("cpf",normalized).eq("is_active",true);
+    let request=supabase.from("employees").select("*").eq("cpf",normalized).order("is_active",{ascending:false}).limit(1);
     if(companyId)request=request.eq("company_id",companyId);
     const {data:rows,error:lookupError}=await request.limit(1);
     setLookupLoading(false);
