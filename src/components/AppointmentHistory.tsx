@@ -17,7 +17,7 @@ export function AppointmentHistory({ rows, language, companies }: {
   const [employeeId, setEmployeeId] = useState("all");
   const workers = Array.from(new Map(rows.map(row => [row.employee_id, appointmentIdentity(row)])).entries());
   const filtered = filterAppointmentHistory(rows, query, employeeId === "all" ? "" : employeeId)
-    .toSorted((a, b) => new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime());
+    .sort((a, b) => new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime());
   const statuses: Record<string, string> = pt
     ? { scheduled: "Agendado", confirmed: "Confirmado", completed: "Concluído", cancelled: "Cancelado" }
     : { scheduled: "Scheduled", confirmed: "Confirmed", completed: "Completed", cancelled: "Cancelled" };
