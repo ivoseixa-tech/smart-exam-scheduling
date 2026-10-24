@@ -13,4 +13,5 @@
 - [x] Permitir ajustes dos dados no novo agendamento, gerar código único e consultar histórico por nome/CPF
 
 ## Em andamento
+- [ ] Atualizar o cadastro pela última alteração salva em funcionário ou agendamento, preservando históricos
 - [ ] Implementar agenda controlada, exames por função/funcionário, avisos e guia PDF
