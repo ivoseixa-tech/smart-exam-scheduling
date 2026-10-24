@@ -18,3 +18,4 @@
 - Persist editable employee details as appointment snapshots and generate unique codes in the database for every insert; history reads snapshots through existing company-scoped access so registry changes cannot rewrite prior appointments.
 - Finalize appointment exams and current employee details together through the service-only database RPC after server-side tenant validation, so the latest successful save updates the registry without rewriting historical snapshots or applying failed appointment edits.
 - Use the service-role-only save_clinic_for_user RPC with an omitted location ID for new clinics, because generated RPC types cannot express nullable required UUID arguments.
+- Use the shared occupational-function field in employee and appointment forms so a single value keeps the job title and saved function ID in sync.
