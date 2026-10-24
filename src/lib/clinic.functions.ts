@@ -105,7 +105,12 @@ export const loadClinicsForCurrentUser = createServerFn({ method: "GET" })
 
     if (linksError) throw linksError;
 
-    const locationIds = Array.from(new Set((links ?? []).map((row) => row.location_id)));
+    let locationIds = Array.from(new Set((links ?? []).map((row) => row.location_id)));
+    if (isMaster) {
+      const { data: all, error: allError } = await supabaseAdmin.from("exam_locations").select("id").eq("is_active", true);
+      if (allError) throw allError;
+      locationIds = (all ?? []).map((row) => row.id);
+    }
     if (!locationIds.length) return { locations: [], links: [], schedules: [] };
 
     const [{ data: locations, error: locationsError }, { data: schedules, error: schedulesError }] = await Promise.all([
