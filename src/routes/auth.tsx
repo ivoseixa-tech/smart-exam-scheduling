@@ -1,8 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { signInWithUsername } from "@/lib/user-auth.functions";
+import { useI18n } from "@/lib/i18n";
 import { Activity, ArrowRight, Building2, CheckCircle2, Globe2, LockKeyhole, Mail, UserRound } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,58 +23,31 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
-  const [language, setLanguage] = useState<"pt" | "en">("pt");
-  const [fullName, setFullName] = useState(""); const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
+  const { language, setLanguage } = useI18n();
+  const login = useServerFn(signInWithUsername);
+  const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
   const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false);
   const copy = language === "pt" ? {
     title: "Saúde ocupacional, organizada.", subtitle: "Empresas, funcionários, exames e agenda em um único ambiente seguro.",
-    signIn: "Entrar", signUp: "Criar acesso", email: "E-mail ou código de login", password: "Senha", name: "Nome completo",
+    signIn: "Entrar", signUp: "Criar acesso", email: "Nome de usuário", password: "Senha", name: "Nome completo",
     new: "Primeiro acesso?", existing: "Já possui acesso?", google: "Continuar com Google", submitIn: "Acessar sistema", submitUp: "Criar minha conta",
     feature1: "Dados separados por empresa", feature2: "Agenda e exames integrados", feature3: "Acesso aprovado pelo usuário mestre", pending: "Cadastro recebido. Aguarde a aprovação do usuário mestre para acessar o sistema.",
   } : {
     title: "Occupational health, organized.", subtitle: "Companies, employees, exams and schedules in one secure workspace.",
-    signIn: "Sign in", signUp: "Create access", email: "Email or login code", password: "Password", name: "Full name",
+    signIn: "Sign in", signUp: "Create access", email: "Username", password: "Password", name: "Full name",
     new: "First access?", existing: "Already registered?", google: "Continue with Google", submitIn: "Open system", submitUp: "Create my account",
     feature1: "Company-isolated data", feature2: "Integrated schedule and exams", feature3: "Access approved by the master user", pending: "Registration received. Wait for the master user to approve your access.",
   };
 
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setMessage("");
-    if (mode === "signin") {
-      const loginIdentifier = email.trim(); const authEmail = loginIdentifier.includes("@") ? loginIdentifier : `${loginIdentifier.toLowerCase()}@login.medagenda.local`; const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password });
-      if (error) setMessage(error.message);
-      else {
-        const { data: userData } = await supabase.auth.getUser();
-        const { data: profile } = await supabase.from("profiles").select("is_active").eq("id", userData.user?.id ?? "").maybeSingle();
-        if (profile && !profile.is_active) { await supabase.auth.signOut(); setMessage(copy.pending); }
-        else await navigate({ to: "/dashboard" });
-      }
-    } else {
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth`,
-          data: { full_name: fullName.trim(), language },
-        },
-      });
-      if (error) setMessage(error.message);
-      else if (!data.session) setMessage(language === "pt" ? "Não foi possível iniciar o acesso. Tente entrar com a conta criada." : "Access could not be started. Try signing in with the account you created.");
-      else {
-        const { data: profile } = await supabase.rpc("initialize_profile", { _full_name: fullName.trim(), _language: language });
-        const active = typeof profile === "object" && profile !== null && !Array.isArray(profile) && profile["is_active"] === true;
-        if (active) await navigate({ to: "/dashboard" });
-        else { await supabase.auth.signOut(); setMode("signin"); setPassword(""); setMessage(copy.pending); }
-      }
-    }
-    setBusy(false);
-  }
-
-  async function googleSignIn() {
-    setBusy(true); const result = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
-    if (result.error) { setMessage(result.error.message); setBusy(false); return; }
-    if (!result.redirected) await navigate({ to: "/dashboard" });
+    try {
+      const tokens = await login({ data: { username: email, password } });
+      const { error } = await supabase.auth.setSession(tokens);
+      if (error) throw error;
+      await navigate({ to: "/dashboard" });
+    } catch (error) { setMessage(error instanceof Error ? error.message : language === "pt" ? "Não foi possível entrar." : "Could not sign in."); }
+    finally { setBusy(false); }
   }
 
   return <main className="grid min-h-screen bg-background lg:grid-cols-[1.05fr_.95fr]">
@@ -83,16 +59,13 @@ function AuthPage() {
     </section>
     <section className="flex items-center justify-center p-6 sm:p-10"><div className="w-full max-w-md">
       <div className="mb-10 flex items-center justify-between lg:justify-end"><div className="flex items-center gap-2 text-lg font-semibold lg:hidden"><Activity className="text-primary"/> MedAgenda</div><Button variant="ghost" size="sm" onClick={() => setLanguage(language === "pt" ? "en" : "pt")}><Globe2/> {language.toUpperCase()}</Button></div>
-      <div className="mb-8"><p className="text-sm font-medium text-primary">MedAgenda Ocupacional</p><h2 className="mt-2 text-3xl font-semibold">{mode === "signin" ? copy.signIn : copy.signUp}</h2></div>
-      <form className="space-y-5" onSubmit={submit}>{mode === "signup" && <div className="space-y-2"><Label htmlFor="name">{copy.name}</Label><div className="relative"><UserRound className="absolute left-3 top-2.5 size-4 text-muted-foreground"/><Input id="name" className="pl-10" value={fullName} onChange={e=>setFullName(e.target.value)} minLength={2} maxLength={120} required/></div></div>}
-        <div className="space-y-2"><Label htmlFor="email">{copy.email}</Label><div className="relative"><Mail className="absolute left-3 top-2.5 size-4 text-muted-foreground"/><Input id="email" className="pl-10" type="email" value={email} onChange={e=>setEmail(e.target.value)} required maxLength={255}/></div></div>
-        <div className="space-y-2"><Label htmlFor="password">{copy.password}</Label><div className="relative"><LockKeyhole className="absolute left-3 top-2.5 size-4 text-muted-foreground"/><Input id="password" className="pl-10" type="password" value={password} onChange={e=>setPassword(e.target.value)} required minLength={8} maxLength={72}/></div></div>
+      <div className="mb-8"><p className="text-sm font-medium text-primary">MedAgenda Ocupacional</p><h2 className="mt-2 text-3xl font-semibold">{copy.signIn}</h2></div>
+      <form className="space-y-5" onSubmit={submit}>
+        <div className="space-y-2"><Label htmlFor="email">{copy.email}</Label><div className="relative"><Mail className="absolute left-3 top-2.5 size-4 text-muted-foreground"/><Input id="email" className="pl-10" type="text" autoComplete="username" value={email} onChange={e=>setEmail(e.target.value)} required maxLength={255}/></div></div>
+        <div className="space-y-2"><Label htmlFor="password">{copy.password}</Label><div className="relative"><LockKeyhole className="absolute left-3 top-2.5 size-4 text-muted-foreground"/><Input id="password" className="pl-10" type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required minLength={8} maxLength={72}/></div></div>
         {message && <p className="rounded-md border border-border bg-muted p-3 text-sm">{message}</p>}
-        <Button className="h-11 w-full" disabled={busy}>{mode === "signin" ? copy.submitIn : copy.submitUp}<ArrowRight/></Button>
+        <Button className="h-11 w-full" disabled={busy}>{copy.submitIn}<ArrowRight/></Button>
       </form>
-      <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border"/>OU<span className="h-px flex-1 bg-border"/></div>
-      <Button variant="outline" className="h-11 w-full" onClick={googleSignIn} disabled={busy}><Building2/>{copy.google}</Button>
-      <p className="mt-7 text-center text-sm text-muted-foreground">{mode === "signin" ? copy.new : copy.existing} <button className="font-semibold text-primary" onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setMessage(""); }}>{mode === "signin" ? copy.signUp : copy.signIn}</button></p>
     </div></section>
   </main>;
 }

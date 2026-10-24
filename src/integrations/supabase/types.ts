@@ -778,33 +778,39 @@ export type Database = {
           created_at: string
           full_name: string
           id: string
+          initial_password_pending: boolean
           is_active: boolean
           job_title: string | null
           phone: string | null
           preferred_language: string
           updated_at: string
+          username: string | null
         }
         Insert: {
           company_id?: string | null
           created_at?: string
           full_name: string
           id: string
+          initial_password_pending?: boolean
           is_active?: boolean
           job_title?: string | null
           phone?: string | null
           preferred_language?: string
           updated_at?: string
+          username?: string | null
         }
         Update: {
           company_id?: string | null
           created_at?: string
           full_name?: string
           id?: string
+          initial_password_pending?: boolean
           is_active?: boolean
           job_title?: string | null
           phone?: string | null
           preferred_language?: string
           updated_at?: string
+          username?: string | null
         }
         Relationships: [
           {
