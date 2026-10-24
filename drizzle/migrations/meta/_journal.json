@@ -120,6 +120,13 @@
       "when": 1792868993721,
       "tag": "0016_company_logos",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792870605816,
+      "tag": "0017_managed_username_access",
+      "breakpoints": true
     }
   ]
 }
