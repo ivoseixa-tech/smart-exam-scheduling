@@ -409,19 +409,24 @@ function AppointmentDialog({open,onClose,onSaved,employees,exams,profile,compani
       }
     }
     setSlots(generated);setSlotKey(generated[0]?.key??"");
-  },[selectedClinic]);
+  },[selectedClinic,locationSchedules]);
+  useEffect(()=>{if(open&&!clinicId&&availableClinics.length===1)setClinicId(availableClinics[0]!.id);},[open,clinicId,availableClinics]);
 
-  async function lookupEmployee(){
-    const normalized=cpf.replace(/\D/g,"");if(normalized.length!==11){setError("Informe os 11 dígitos do CPF.");return;}if(!companyId){setError("Selecione a empresa antes de consultar o CPF.");return;}
+  async function lookupEmployee(value?:string){
+    const normalized=(value??cpf).replace(/\D/g,"");if(normalized.length!==11){setError("Informe os 11 dígitos do CPF.");return;}
     setLookupLoading(true);setError("");setLookupDone(false);
-    const {data:found,error:lookupError}=await supabase.from("employees").select("*").eq("company_id",companyId).eq("cpf",normalized).maybeSingle();
+    let request=supabase.from("employees").select("*").eq("cpf",normalized).eq("is_active",true);
+    if(companyId)request=request.eq("company_id",companyId);
+    const {data:rows,error:lookupError}=await request.limit(1);
     setLookupLoading(false);
     if(lookupError){setError("Não foi possível consultar o CPF.");return;}
-    if(found){setEmployee(found as Employee);setLookupDone(true);return;}
+    const found=rows?.[0];
+    if(found){if(found.company_id!==companyId)setCompanyId(found.company_id);setEmployee(found as Employee);setLookupDone(true);return;}
+    if(!companyId){setError("CPF não encontrado. Selecione a empresa para cadastrar o novo funcionário.");}
     setEmployee(null);setFunctionId("");setSelectedExamIds([]);setEmployeeFields({full_name:"",rg:"",birthplace:"",nationality:"",birth_date:"",sex:"not_informed",job_title:"",admission_date:"",workplace:""});setLookupDone(true);
   }
   function formatCpfInput(value:string){const digits=value.replace(/\D/g,"").slice(0,11);return digits.replace(/^(\d{3})(\d)/,"$1.$2").replace(/^(\d{3})\.(\d{3})(\d)/,"$1.$2.$3").replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/,"$1.$2.$3-$4");}
-  function handleCpfChange(value:string){const formatted=formatCpfInput(value);setCpf(formatted);if(employee||lookupDone){setEmployee(null);setLookupDone(false);setFunctionId("");setSelectedExamIds([]);setEmployeeFields({full_name:"",rg:"",birthplace:"",nationality:"",birth_date:"",sex:"not_informed",job_title:"",admission_date:"",workplace:""});}}
+  function handleCpfChange(value:string){const formatted=formatCpfInput(value);setCpf(formatted);if(employee||lookupDone){setEmployee(null);setLookupDone(false);setFunctionId("");setSelectedExamIds([]);setEmployeeFields({full_name:"",rg:"",birthplace:"",nationality:"",birth_date:"",sex:"not_informed",job_title:"",admission_date:"",workplace:""});}if(formatted.replace(/\D/g,"").length===11)void lookupEmployee(formatted);}
 
   function updateEmployeeField(key:keyof typeof employeeFields,value:string){setEmployeeFields(current=>({...current,[key]:value}));}
 
@@ -444,7 +449,7 @@ function AppointmentDialog({open,onClose,onSaved,employees,exams,profile,compani
       const {data:createdEmployee,error:employeeError}=await supabase.from("employees").insert(values).select("*").single();
       if(employeeError||!createdEmployee){setError(employeeError?.message??"Não foi possível cadastrar o funcionário.");return;}
       employeeId=createdEmployee.id;
-      if(selectedExamIds.length){const {error:examError}=await supabase.from("employee_exams").insert(selectedExamIds.map(exam_id=>({employee_id:employeeId,exam_id})));if(examError){await supabase.from("employees").delete().eq("id",employeeId);setError(examError.message);return;}}
+      if(isMaster&&selectedExamIds.length){const {error:examError}=await supabase.from("employee_exams").insert(selectedExamIds.map(exam_id=>({employee_id:employeeId,exam_id})));if(examError){setError(examError.message);return;}}
       examIds=selectedExamIds;
       }
     }
