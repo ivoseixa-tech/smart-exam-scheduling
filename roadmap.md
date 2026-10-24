@@ -15,4 +15,5 @@
 - [x] Corrigir salvamento do agendamento, unificar função e continuar cadastro com CPF não encontrado
 
 ## Em andamento
+- [ ] Adicionar importação em lote de empresas e funcionários para o mestre, com modelos e validação
 - [ ] Implementar agenda controlada, exames por função/funcionário, avisos e guia PDF
