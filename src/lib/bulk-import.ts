@@ -11,6 +11,7 @@ const required = text.min(1);
 const digits = (length: number) => text.transform(v => v.replace(/[.\-/\s]/g, "")).pipe(z.string().regex(new RegExp(`^\\d{${length}}$`)));
 const date = text.refine(v => /^\d{4}-\d{2}-\d{2}$/.test(v) && Number.isFinite(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v, "YYYY-MM-DD");
 const optional = text.optional().default("");
+const sexValues: Record<string, string> = { feminino: "female", masculino: "male", outro: "other", nao_informado: "not_informed" };
 export const companyImportSchema = z.object({
   cnpj: digits(14), razao_social: optional, nome_fantasia: optional, situacao_cadastral: optional,
   cnae: optional, descricao_cnae: optional, email: optional.refine(v => !v || z.string().email().safeParse(v).success),
@@ -21,11 +22,13 @@ export const companyImportSchema = z.object({
 export const employeeImportSchema = z.object({
   cnpj_empresa: digits(14), nome_completo: required.min(2).max(120), cpf: digits(11), rg: optional,
   naturalidade: required, nacionalidade: required, data_nascimento: date,
-  sexo: optional.transform(v => ({ feminino: "female", masculino: "male", outro: "other", nao_informado: "not_informed" }[v.toLowerCase()] ?? (v || "not_informed"))).pipe(z.enum(["female", "male", "other", "not_informed"])),
+  sexo: optional.transform(v => sexValues[v.toLowerCase()] ?? (v || "not_informed")).pipe(z.enum(["female", "male", "other", "not_informed"])),
   funcao: required.min(2).max(120), data_admissao: optional.refine(v => !v || date.safeParse(v).success), posto_trabalho: required,
 });
 export function parseImportCsv(content: string, kind: ImportKind) {
-  const parsed = Papa.parse<ImportRow>(content.replace(/^\uFEFF/, ""), { header: true, skipEmptyLines: "greedy", transformHeader: v => v.trim().toLowerCase(), transform: v => v.trim() });
+  const normalized = content.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
+  const header = normalized.split("\n")[0] ?? "";
+  const parsed = Papa.parse<ImportRow>(normalized, { delimiter: header.includes(";") ? ";" : ",", header: true, skipEmptyLines: "greedy", transformHeader: v => v.trim().toLowerCase(), transform: v => v.trim() });
   const requiredHeaders = kind === "companies" ? ["cnpj"] : employeeHeaders.filter(v => !["rg", "data_admissao", "sexo"].includes(v));
   if (parsed.errors.length || requiredHeaders.some(v => !parsed.meta.fields?.includes(v))) throw new Error("headers");
   if (!parsed.data.length || parsed.data.length > 500) throw new Error("count");
