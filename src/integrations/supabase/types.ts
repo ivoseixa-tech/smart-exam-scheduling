@@ -621,6 +621,7 @@ export type Database = {
           description_en: string | null
           description_pt: string | null
           duration_minutes: number
+          esocial_code: string | null
           id: string
           is_active: boolean
           name_en: string
@@ -637,6 +638,7 @@ export type Database = {
           description_en?: string | null
           description_pt?: string | null
           duration_minutes?: number
+          esocial_code?: string | null
           id?: string
           is_active?: boolean
           name_en: string
@@ -653,6 +655,7 @@ export type Database = {
           description_en?: string | null
           description_pt?: string | null
           duration_minutes?: number
+          esocial_code?: string | null
           id?: string
           is_active?: boolean
           name_en?: string
