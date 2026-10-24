@@ -5,6 +5,8 @@ export type AppointmentGuideData = {
   company: string;
   cnpj: string;
   companyAddress: string;
+  logoUrl?: string | null;
+  code?: string;
   employee: string;
   cpf: string;
   jobTitle: string;
@@ -48,7 +50,18 @@ export async function downloadAppointmentGuide(data: AppointmentGuideData) {
   page.drawRectangle({ x: 0, y: height - 118, width, height: 118, color: teal });
   page.drawText("MEDAGENDA", { x: 42, y: height - 45, size: 12, font: bold, color: rgb(1, 1, 1) });
   page.drawText(text.title, { x: 42, y: height - 82, size: 22, font: bold, color: rgb(1, 1, 1) });
-  page.drawText(`#${data.cpf.slice(-4)}-${new Date(data.startsAt).getTime().toString().slice(-6)}`, { x: 445, y: height - 45, size: 9, font: regular, color: rgb(0.88, 1, 0.98) });
+  if (data.logoUrl) {
+    try {
+      const bytes = await fetch(data.logoUrl).then((r) => r.arrayBuffer());
+      const isPng = data.logoUrl.startsWith("data:image/png") || data.logoUrl.toLowerCase().endsWith(".png");
+      const image = isPng ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
+      const scale = Math.min(70 / image.width, 70 / image.height);
+      const w = image.width * scale, h = image.height * scale;
+      page.drawRectangle({ x: width - 42 - 80, y: height - 104, width: 80, height: 80, color: rgb(1, 1, 1) });
+      page.drawImage(image, { x: width - 42 - 40 - w / 2, y: height - 64 - h / 2, width: w, height: h });
+    } catch { /* logo is optional */ }
+  }
+  page.drawText(data.code ? data.code.slice(0, 14) : `#${data.cpf.slice(-4)}-${new Date(data.startsAt).getTime().toString().slice(-6)}`, { x: data.logoUrl ? 300 : 445, y: height - 45, size: 9, font: regular, color: rgb(0.88, 1, 0.98) });
   let y = height - 152;
   const section = (title: string) => { page.drawText(title, { x: 42, y, size: 9, font: bold, color: teal }); y -= 15; };
   const row = (label: string, value: string) => { page.drawText(label, { x: 42, y, size: 9, font: bold, color: muted }); const lines = wrap(value, 66); lines.forEach((item, index) => page.drawText(item, { x: 155, y: y - index * 13, size: 10, font: regular, color: ink })); y -= Math.max(24, lines.length * 13 + 6); };
