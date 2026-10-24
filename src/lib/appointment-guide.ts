@@ -33,13 +33,15 @@ export async function downloadAppointmentGuide(data: AppointmentGuideData) {
   const text = data.language === "pt" ? {
     title: "Guia de agendamento ocupacional", company: "EMPRESA", employee: "FUNCIONÁRIO",
     appointment: "AGENDAMENTO", exams: "EXAMES", instructions: "ORIENTAÇÕES",
+    cnpj: "CNPJ",
     date: "Data e horário", location: "Local", type: "Tipo ocupacional", notes: "Observações",
-    footer: "Apresente esta guia e um documento de identificação no atendimento.",
+    footer: "Apresente esta guia e um documento de identificação válido e com foto no atendimento.",
   } : {
     title: "Occupational appointment guide", company: "COMPANY", employee: "EMPLOYEE",
     appointment: "APPOINTMENT", exams: "EXAMS", instructions: "INSTRUCTIONS",
+    cnpj: "CNPJ",
     date: "Date and time", location: "Location", type: "Occupational type", notes: "Notes",
-    footer: "Present this guide and an identification document at the appointment.",
+    footer: "Present this guide and a valid photo identification document at the appointment.",
   };
   const safe = (value: string) => value.replace(/\s+/g, " ").trim();
   const wrap = (value: string, max = 82) => {
@@ -66,7 +68,7 @@ export async function downloadAppointmentGuide(data: AppointmentGuideData) {
   const section = (title: string) => { page.drawText(title, { x: 42, y, size: 9, font: bold, color: teal }); y -= 15; };
   const row = (label: string, value: string) => { page.drawText(label, { x: 42, y, size: 9, font: bold, color: muted }); const lines = wrap(value, 66); lines.forEach((item, index) => page.drawText(item, { x: 155, y: y - index * 13, size: 10, font: regular, color: ink })); y -= Math.max(24, lines.length * 13 + 6); };
   const divider = () => { page.drawLine({ start: { x: 42, y }, end: { x: width - 42, y }, thickness: 1, color: line }); y -= 24; };
-  section(text.company); row(data.company, `${data.cnpj} · ${data.companyAddress}`); divider();
+  section(text.company); row(text.company, data.company); row(text.cnpj, data.cnpj); divider();
   section(text.employee); row(data.employee, `${data.cpf} · ${data.jobTitle}`); divider();
   section(text.appointment);
   row(text.date, new Date(data.startsAt).toLocaleString(data.language === "pt" ? "pt-BR" : "en-US", { dateStyle: "long", timeStyle: "short" }));
