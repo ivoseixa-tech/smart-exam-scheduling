@@ -12,4 +12,5 @@
 - [x] Exigir função no novo agendamento
 
 ## Em andamento
+- [ ] Permitir ajustes dos dados no novo agendamento, gerar código único e consultar histórico por nome/CPF
 - [ ] Implementar agenda controlada, exames por função/funcionário, avisos e guia PDF
