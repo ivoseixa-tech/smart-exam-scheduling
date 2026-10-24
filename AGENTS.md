@@ -15,4 +15,5 @@
 - Keep privileged user administration in authenticated server functions with a server-side master-role check before admin access.
 - Keep newly registered non-master profiles inactive until a master approves them, because authentication alone must not grant application access.
 - Record the employee job title on each appointment because scheduling must preserve the occupational role used at that time.
+- Persist editable employee details as appointment snapshots and generate unique codes in the database for every insert; history reads snapshots through existing company-scoped access so registry changes cannot rewrite prior appointments.
 - Use the service-role-only save_clinic_for_user RPC with an omitted location ID for new clinics, because generated RPC types cannot express nullable required UUID arguments.

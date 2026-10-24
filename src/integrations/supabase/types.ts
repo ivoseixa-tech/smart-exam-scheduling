@@ -93,11 +93,13 @@ export type Database = {
       }
       appointments: {
         Row: {
+          appointment_code: string
           assessment_type: string
           company_id: string
           created_at: string
           created_by: string
           employee_id: string
+          employee_snapshot: Json | null
           ends_at: string
           id: string
           job_title: string | null
@@ -111,11 +113,13 @@ export type Database = {
           updated_by: string
         }
         Insert: {
+          appointment_code?: string
           assessment_type: string
           company_id: string
           created_at?: string
           created_by: string
           employee_id: string
+          employee_snapshot?: Json | null
           ends_at: string
           id?: string
           job_title?: string | null
@@ -129,11 +133,13 @@ export type Database = {
           updated_by: string
         }
         Update: {
+          appointment_code?: string
           assessment_type?: string
           company_id?: string
           created_at?: string
           created_by?: string
           employee_id?: string
+          employee_snapshot?: Json | null
           ends_at?: string
           id?: string
           job_title?: string | null

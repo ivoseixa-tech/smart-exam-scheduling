@@ -10,6 +10,7 @@
 - [x] Corrigir consulta e preenchimento dos dados de empresa por CNPJ
 - [x] Separar nome e CPF e tornar RG e admissão opcionais
 - [x] Exigir função no novo agendamento
+- [x] Permitir ajustes dos dados no novo agendamento, gerar código único e consultar histórico por nome/CPF
 
 ## Em andamento
 - [ ] Implementar agenda controlada, exames por função/funcionário, avisos e guia PDF

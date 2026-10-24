@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
+import { employeeSnapshotSchema } from "@/lib/appointment-record";
 
 const appointmentInput = z.object({
   employeeId: z.string().uuid(),
@@ -10,6 +11,7 @@ const appointmentInput = z.object({
   endsAt: z.string().datetime(),
   assessmentType: z.enum(["admission", "periodic", "return_to_work", "risk_change", "dismissal"]),
   jobTitle: z.string().trim().min(1).max(200),
+  employeeSnapshot: employeeSnapshotSchema.optional(),
   examIds: z.array(z.string().uuid()).min(1),
   notes: z.string().trim().max(2000).nullable().optional(),
 });
@@ -87,11 +89,18 @@ export const createAppointmentFromClinic = createServerFn({ method: "POST" })
 
       const { data: employee, error: employeeError } = await supabaseAdmin
         .from("employees")
-        .select("id,company_id,is_active,occupational_function_id")
+        .select("id,company_id,is_active,occupational_function_id,cpf")
         .eq("id", data.employeeId)
         .maybeSingle();
       if (employeeError) throw employeeError;
       if (!employee?.is_active || employee.company_id !== data.companyId) throw new Error("Funcionário indisponível.");
+      if (data.employeeSnapshot && data.employeeSnapshot.cpf !== employee.cpf) throw new Error("O CPF deve corresponder ao funcionário selecionado.");
+      const functionId = data.employeeSnapshot?.occupational_function_id ?? employee.occupational_function_id;
+      if (functionId) {
+        const { data: selectedFunction, error: functionError } = await supabaseAdmin.from("occupational_functions")
+          .select("id").eq("id", functionId).eq("company_id", data.companyId).eq("is_active", true).maybeSingle();
+        if (functionError || !selectedFunction) throw new Error("Função indisponível para esta empresa.");
+      }
 
       const clinics = await getClinicsFromSupabase(supabaseAdmin, data.companyId);
       const clinic = clinics.find((item) =>
@@ -128,11 +137,11 @@ export const createAppointmentFromClinic = createServerFn({ method: "POST" })
 
       const employeeExamSet = new Set((employeeExams ?? []).map((row) => row.exam_id));
       let functionExamSet = new Set<string>();
-      if (employee?.occupational_function_id) {
+      if (functionId) {
         const { data: functionExams, error: functionExamsError } = await supabaseAdmin
           .from("occupational_function_exams")
           .select("exam_id")
-          .eq("function_id", employee.occupational_function_id)
+          .eq("function_id", functionId)
           .in("exam_id", data.examIds);
         if (functionExamsError) throw functionExamsError;
         functionExamSet = new Set((functionExams ?? []).map((row) => row.exam_id));
@@ -173,6 +182,7 @@ export const createAppointmentFromClinic = createServerFn({ method: "POST" })
           employee_id: data.employeeId,
           assessment_type: data.assessmentType,
           job_title: data.jobTitle,
+          ...(data.employeeSnapshot ? { employee_snapshot: { ...data.employeeSnapshot, job_title: data.jobTitle } } : {}),
           starts_at: data.startsAt,
           ends_at: data.endsAt,
           location: clinic.name,
@@ -182,7 +192,7 @@ export const createAppointmentFromClinic = createServerFn({ method: "POST" })
           created_by: authData.user.id,
           updated_by: authData.user.id,
         })
-        .select("id")
+        .select("id,appointment_code")
         .single();
       if (createError || !created) throw createError || new Error("Não foi possível criar o agendamento.");
 
@@ -218,7 +228,7 @@ export const createAppointmentFromClinic = createServerFn({ method: "POST" })
         }
       }
 
-      return { ok: true, appointmentId: created.id };
+      return { ok: true, appointmentId: created.id, appointmentCode: created.appointment_code };
     } catch (error) {
       const message = safeError(error, "Não foi possível criar o agendamento.");
       console.error("[Appointment:createAppointmentFromClinic]", message);
