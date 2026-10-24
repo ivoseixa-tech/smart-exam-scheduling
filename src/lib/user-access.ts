@@ -12,3 +12,12 @@ export const managedUserSchema = z.object({
 export const passwordChangeSchema = z.object({ currentPassword: z.string().min(1), password: z.string().min(8).max(72) })
   .refine((value) => value.currentPassword !== value.password, { message: "Escolha uma senha diferente da inicial.", path: ["password"] });
 export function canManageUsers(isMaster: boolean, isActive: boolean) { return isMaster && isActive; }
+
+export const managedUserEditSchema = managedUserSchema.omit({ password: true, active: true }).extend({
+  userId: z.string().uuid(),
+  companyId: z.string().uuid().nullable(),
+});
+
+export function canDeleteManagedUser(actorId: string, targetId: string, targetIsMaster: boolean) {
+  return actorId !== targetId && !targetIsMaster;
+}

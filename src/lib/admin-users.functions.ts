@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { managedUserSchema, usernameSchema } from "@/lib/user-access";
+import { canDeleteManagedUser, managedUserEditSchema, managedUserSchema, usernameSchema } from "@/lib/user-access";
 
 export const listManagedUsers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -18,9 +18,9 @@ export const listManagedUsers = createServerFn({ method: "GET" })
     const error = authError ?? profilesError ?? rolesError ?? companiesError;
     if (error) throw new Error("Não foi possível carregar os usuários.");
     const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
-    const roleById = new Map((roles ?? []).map((role) => [role.user_id, role.role]));
+    const masterIds = new Set((roles ?? []).filter((role) => role.role === "master").map((role) => role.user_id));
     const companyById = new Map((companies ?? []).map((company) => [company.id, company.trade_name || company.legal_name]));
-    return authData.users.map((user) => {
+    return authData.users.filter((user) => !user.deleted_at).map((user) => {
       const profile = profileById.get(user.id);
       return {
         id: user.id,
@@ -28,7 +28,9 @@ export const listManagedUsers = createServerFn({ method: "GET" })
         username: profile?.username ?? "",
         fullName: profile?.full_name ?? String(user.user_metadata?.["full_name"] ?? "Usuário"),
         companyName: profile?.company_id ? companyById.get(profile.company_id) ?? null : null,
-        role: roleById.get(user.id) ?? "company_user",
+        companyId: profile?.company_id ?? null,
+        role: masterIds.has(user.id) ? "master" : "company_user",
+        isSelf: user.id === context.userId,
         isActive: profile?.is_active ?? false,
         createdAt: user.created_at,
         lastSignInAt: user.last_sign_in_at ?? null,
@@ -149,5 +151,57 @@ export const setManagedUsername = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("profiles").update({ username: data.username }).eq("id", data.userId);
     if (error) throw new Error("Nome de usuário inválido ou já utilizado. / Invalid or taken username.");
+    return { ok: true };
+  });
+
+export const updateManagedUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => managedUserEditSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: isMaster, error: roleError } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "master" });
+    if (roleError || !isMaster) throw new Error("Acesso permitido somente ao usuário mestre. / Master access required.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const [{ data: target, error: targetError }, { data: targetRoles, error: targetRoleError }, { data: profile, error: profileError }] = await Promise.all([
+      supabaseAdmin.auth.admin.getUserById(data.userId),
+      supabaseAdmin.from("user_roles").select("role").eq("user_id", data.userId),
+      supabaseAdmin.from("profiles").select("company_id").eq("id", data.userId).single(),
+    ]);
+    if (targetError || targetRoleError || profileError || !target.user || target.user.deleted_at || !profile) throw new Error("Usuário não encontrado. / User not found.");
+    const targetIsMaster = targetRoles?.some((role) => role.role === "master") ?? false;
+    if (targetIsMaster && data.companyId !== profile.company_id) throw new Error("O vínculo do mestre não pode ser alterado. / Master company assignment cannot be changed.");
+    if (!targetIsMaster && !data.companyId) throw new Error("Selecione uma empresa aprovada. / Select an approved company.");
+    if (data.companyId) {
+      const { data: company, error } = await context.supabase.from("companies").select("status").eq("id", data.companyId).single();
+      if (error || company?.status !== "approved") throw new Error("Selecione uma empresa aprovada. / Select an approved company.");
+    }
+    const { data: existing, error: lookupError } = await supabaseAdmin.from("profiles").select("id").eq("username", data.username).neq("id", data.userId).maybeSingle();
+    if (lookupError || existing) throw new Error("Nome de usuário já utilizado. / Username already taken.");
+    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(data.userId, { email: data.email, email_confirm: true, user_metadata: { full_name: data.fullName } });
+    if (authError) throw new Error("Não foi possível atualizar o usuário. Confira o e-mail. / Could not update user. Check email.");
+    const { error: updateError } = await supabaseAdmin.from("profiles").update({ username: data.username, full_name: data.fullName, company_id: data.companyId }).eq("id", data.userId);
+    if (updateError) {
+      const { error: restoreError } = await supabaseAdmin.auth.admin.updateUserById(data.userId, { email: target.user.email, email_confirm: true, user_metadata: target.user.user_metadata });
+      if (restoreError) throw new Error("Cadastro não salvo; confira o e-mail antes de tentar novamente. / Record not saved; verify the email before retrying.");
+      throw new Error("Não foi possível salvar o usuário. / Could not save user.");
+    }
+    return { ok: true };
+  });
+
+export const deleteManagedUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ userId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: isMaster, error: roleError } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "master" });
+    if (roleError || !isMaster) throw new Error("Acesso permitido somente ao usuário mestre. / Master access required.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: roles, error: targetRoleError } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", data.userId);
+    if (targetRoleError) throw new Error("Não foi possível verificar o usuário. / Could not verify user.");
+    if (!canDeleteManagedUser(context.userId, data.userId, roles?.some((role) => role.role === "master") ?? false)) throw new Error("Contas mestre não podem ser excluídas. / Master accounts cannot be deleted.");
+    const { data: target, error: targetError } = await supabaseAdmin.auth.admin.getUserById(data.userId);
+    if (targetError || !target.user || target.user.deleted_at) throw new Error("Usuário não encontrado. / User not found.");
+    const { error: profileError } = await supabaseAdmin.from("profiles").update({ is_active: false }).eq("id", data.userId).select("id").single();
+    if (profileError) throw new Error("Não foi possível bloquear o acesso para exclusão. / Could not block access for deletion.");
+    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(data.userId, true);
+    if (deleteError) throw new Error("O acesso foi desabilitado, mas a exclusão não foi concluída. Tente novamente. / Access disabled, but deletion failed. Please retry.");
     return { ok: true };
   });
