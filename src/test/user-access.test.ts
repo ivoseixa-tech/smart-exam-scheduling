@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { canManageUsers, managedUserSchema, passwordChangeSchema, usernameSchema } from "@/lib/user-access";
+import { canDeleteManagedUser, canManageUsers, managedUserEditSchema, managedUserSchema, passwordChangeSchema, usernameSchema } from "@/lib/user-access";
 
 describe("user access rules", () => {
+  it("accepts editing full name, email, username and company without resetting the password", () => {
+    const data = { userId: "12345678-1234-4234-8234-123456789abc", username: "novo.usuario", fullName: "Nome atualizado", email: "novo@example.org", companyId: "12345678-1234-4234-8234-123456789abc" };
+    expect(managedUserEditSchema.parse(data)).toEqual(data);
+    expect(managedUserEditSchema.safeParse({ ...data, email: "invalid" }).success).toBe(false);
+  });
+  it("allows deleting a company user but protects masters and the current account", () => {
+    expect(canDeleteManagedUser("master", "company-user", false)).toBe(true);
+    expect(canDeleteManagedUser("master", "master", false)).toBe(false);
+    expect(canDeleteManagedUser("master", "another-master", true)).toBe(false);
+  });
   it("only an active master can administer users", () => {
     expect(canManageUsers(true, true)).toBe(true);
     expect(canManageUsers(false, true)).toBe(false);
