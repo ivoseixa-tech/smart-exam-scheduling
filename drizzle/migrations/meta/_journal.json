@@ -99,6 +99,13 @@
       "when": 1792858247101,
       "tag": "0013_appointment_codes_and_employee_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792859285265,
+      "tag": "0014_sync_latest_employee_details_on_appointment",
+      "breakpoints": true
     }
   ]
 }

@@ -11,6 +11,7 @@
 - [x] Separar nome e CPF e tornar RG e admissão opcionais
 - [x] Exigir função no novo agendamento
 - [x] Permitir ajustes dos dados no novo agendamento, gerar código único e consultar histórico por nome/CPF
+- [x] Atualizar o cadastro pela última alteração salva em funcionário ou agendamento, preservando históricos
 
 ## Em andamento
 - [ ] Implementar agenda controlada, exames por função/funcionário, avisos e guia PDF

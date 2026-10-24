@@ -196,9 +196,11 @@ export const createAppointmentFromClinic = createServerFn({ method: "POST" })
         .single();
       if (createError || !created) throw createError || new Error("Não foi possível criar o agendamento.");
 
-      const { error: examInsertError } = await supabaseAdmin
-        .from("appointment_exams")
-        .insert(data.examIds.map((exam_id) => ({ appointment_id: created.id, exam_id })));
+      // Exams and registry changes commit together; failed appointments cannot overwrite employee details.
+      const { error: examInsertError } = await supabaseAdmin.rpc("finalize_appointment_employee_details", {
+        p_appointment_id: created.id,
+        p_exam_ids: data.examIds,
+      });
       if (examInsertError) {
         await supabaseAdmin.from("appointment_exams").delete().eq("appointment_id", created.id);
         await supabaseAdmin.from("appointments").delete().eq("id", created.id);

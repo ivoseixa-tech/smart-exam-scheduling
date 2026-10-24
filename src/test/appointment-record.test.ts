@@ -14,4 +14,11 @@ describe("appointment history rules", () => {
   it("filters an individual worker without losing old appointments", () => { expect(filterAppointmentHistory(rows, "", "worker-2").map(r => r.appointment_code)).toEqual(["AG-003"]); });
   it("keeps the appointment's edited details independent of the registry", () => { const row = rows[0]; if (!row) throw new Error("Missing fixture"); expect(appointmentIdentity(row)).toEqual({ full_name: "José Silva", cpf: "12345678901", job_title: "Motorista" }); });
   it("validates edited appointment fields", () => { expect(employeeSnapshotSchema.safeParse({ full_name: "" }).success).toBe(false); });
+  it("preserves previous appointment details after the registry is updated from either workflow", () => {
+    const record = { appointment_code: "AG-OLD", employee_snapshot: { full_name: "José Silva", cpf: "12345678901", job_title: "Motorista" }, job_title: "Motorista", employees: { full_name: "José Silva", cpf: "12345678901" } };
+    record.employees = { full_name: "José Silva Atualizado no Agendamento", cpf: "12345678901" };
+    expect(appointmentIdentity(record)).toEqual({ full_name: "José Silva", cpf: "12345678901", job_title: "Motorista" });
+    record.employees = { full_name: "José Silva Atualizado no Cadastro", cpf: "12345678901" };
+    expect(filterAppointmentHistory([record], "José Silva")[0]?.employee_snapshot.full_name).toBe("José Silva");
+  });
 });

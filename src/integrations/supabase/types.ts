@@ -862,6 +862,10 @@ export type Database = {
         Args: { p_location_id: string }
         Returns: boolean
       }
+      finalize_appointment_employee_details: {
+        Args: { p_appointment_id: string; p_exam_ids: string[] }
+        Returns: undefined
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
