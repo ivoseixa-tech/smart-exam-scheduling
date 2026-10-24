@@ -17,4 +17,5 @@
 - [x] Acesso por usuário e senha, criação pelo mestre e troca da senha inicial
 
 ## Em andamento
+- [ ] Permitir edição completa e exclusão segura de usuários pelo mestre
 - [ ] Implementar agenda controlada, exames por função/funcionário, avisos e guia PDF
