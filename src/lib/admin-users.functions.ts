@@ -166,7 +166,7 @@ export const updateManagedUser = createServerFn({ method: "POST" })
       supabaseAdmin.from("user_roles").select("role").eq("user_id", data.userId),
       supabaseAdmin.from("profiles").select("company_id").eq("id", data.userId).single(),
     ]);
-    if (targetError || targetRoleError || profileError || !target.user || target.user.deleted_at || !profile) throw new Error("Usuário não encontrado. / User not found.");
+    if (targetError || targetRoleError || profileError || !target.user || !target.user.email || target.user.deleted_at || !profile) throw new Error("Usuário não encontrado. / User not found.");
     const targetIsMaster = targetRoles?.some((role) => role.role === "master") ?? false;
     if (targetIsMaster && data.companyId !== profile.company_id) throw new Error("O vínculo do mestre não pode ser alterado. / Master company assignment cannot be changed.");
     if (!targetIsMaster && !data.companyId) throw new Error("Selecione uma empresa aprovada. / Select an approved company.");
