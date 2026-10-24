@@ -16,4 +16,5 @@
 - [x] Adicionar importação em lote de empresas e funcionários para o mestre, com modelos e validação
 
 ## Em andamento
+- [ ] Acesso por usuário e senha, criação pelo mestre e troca da senha inicial
 - [ ] Implementar agenda controlada, exames por função/funcionário, avisos e guia PDF
