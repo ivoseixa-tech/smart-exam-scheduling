@@ -19,3 +19,5 @@
 - Finalize appointment exams and current employee details together through the service-only database RPC after server-side tenant validation, so the latest successful save updates the registry without rewriting historical snapshots or applying failed appointment edits.
 - Use the service-role-only save_clinic_for_user RPC with an omitted location ID for new clinics, because generated RPC types cannot express nullable required UUID arguments.
 - Use the shared occupational-function field in employee and appointment forms so a single value keeps the job title and saved function ID in sync.
+- Run bulk registration imports through master-checked server functions using the caller's RLS client; insert only and skip existing identifiers to protect current records and appointment history.
+- Share the CNPJ registry lookup in a server-only helper so individual and bulk company registration use the same verification sources.
