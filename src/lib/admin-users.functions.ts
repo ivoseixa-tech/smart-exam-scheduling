@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { managedUserSchema, usernameSchema } from "@/lib/user-access";
 
 export const listManagedUsers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -10,7 +11,7 @@ export const listManagedUsers = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [{ data: authData, error: authError }, { data: profiles, error: profilesError }, { data: roles, error: rolesError }, { data: companies, error: companiesError }] = await Promise.all([
       supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
-      supabaseAdmin.from("profiles").select("id,full_name,company_id,is_active"),
+      supabaseAdmin.from("profiles").select("id,full_name,company_id,is_active,username"),
       supabaseAdmin.from("user_roles").select("user_id,role"),
       supabaseAdmin.from("companies").select("id,trade_name,legal_name"),
     ]);
@@ -24,10 +25,11 @@ export const listManagedUsers = createServerFn({ method: "GET" })
       return {
         id: user.id,
         email: user.email ?? "",
+        username: profile?.username ?? "",
         fullName: profile?.full_name ?? String(user.user_metadata?.["full_name"] ?? "Usuário"),
         companyName: profile?.company_id ? companyById.get(profile.company_id) ?? null : null,
         role: roleById.get(user.id) ?? "company_user",
-        isActive: profile?.is_active ?? true,
+        isActive: profile?.is_active ?? false,
         createdAt: user.created_at,
         lastSignInAt: user.last_sign_in_at ?? null,
       };
@@ -43,6 +45,8 @@ export const resetManagedUserPassword = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.auth.admin.updateUserById(data.userId, { password: data.password });
     if (error) throw new Error("Não foi possível alterar a senha deste usuário.");
+    const { error: profileError } = await supabaseAdmin.from("profiles").update({ initial_password_pending: true }).eq("id", data.userId);
+    if (profileError) throw new Error("Senha alterada, mas não foi possível marcar o primeiro acesso.");
     return { ok: true };
   });
 
@@ -56,6 +60,13 @@ export const setManagedUserApproval = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("profiles").update({ is_active: data.approved }).eq("id", data.userId);
     if (error) throw new Error("Não foi possível alterar a aprovação deste usuário.");
+    if (!data.approved) {
+      const { error: banError } = await supabaseAdmin.auth.admin.updateUserById(data.userId, { ban_duration: "876000h" });
+      if (banError) throw new Error("Acesso bloqueado; não foi possível suspender a autenticação.");
+    } else {
+      const { error: banError } = await supabaseAdmin.auth.admin.updateUserById(data.userId, { ban_duration: "none" });
+      if (banError) throw new Error("Não foi possível reativar a autenticação.");
+    }
     return { ok: true };
   });
 
@@ -89,6 +100,7 @@ export const createCompanyAgendaUser = createServerFn({ method: "POST" })
       const { error: profileError } = await supabaseAdmin.from("profiles").insert({
         id: created.user.id, company_id: data.companyId, full_name: data.fullName,
         preferred_language: "pt", is_active: true,
+        username: loginCode.toLowerCase(), initial_password_pending: true,
       });
       if (profileError) throw profileError;
       const { error: roleError2 } = await supabaseAdmin.from("user_roles").insert({ user_id: created.user.id, role: "company_user" });
@@ -98,4 +110,42 @@ export const createCompanyAgendaUser = createServerFn({ method: "POST" })
       throw new Error(error instanceof Error ? error.message : "Não foi possível concluir o cadastro do acesso.");
     }
     return { ok: true, loginCode };
+  });
+
+export const createManagedUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => managedUserSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: isMaster, error } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "master" });
+    if (error || !isMaster) throw new Error("Acesso permitido somente ao usuário mestre.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: company } = await context.supabase.from("companies").select("id,status").eq("id", data.companyId).single();
+    if (company?.status !== "approved") throw new Error("Selecione uma empresa aprovada. / Select an approved company.");
+    const { data: existing } = await supabaseAdmin.from("profiles").select("id").eq("username", data.username).maybeSingle();
+    if (existing) throw new Error("Nome de usuário já utilizado. / Username already taken.");
+    const { data: created, error: authError } = await supabaseAdmin.auth.admin.createUser({ email: data.email, password: data.password, email_confirm: true, user_metadata: { full_name: data.fullName } });
+    if (authError || !created.user) throw new Error("Não foi possível criar o acesso. Confira o e-mail e a senha. / Could not create account. Check email and password.");
+    const id = created.user.id;
+    try {
+      const { error: profileError } = await supabaseAdmin.from("profiles").upsert({ id, full_name: data.fullName, username: data.username, company_id: data.companyId, is_active: data.active, initial_password_pending: true, preferred_language: "pt" });
+      if (profileError) throw profileError;
+      const { error: roleError } = await supabaseAdmin.from("user_roles").upsert({ user_id: id, role: "company_user" }, { onConflict: "user_id,role" });
+      if (roleError) throw roleError;
+    } catch {
+      await supabaseAdmin.auth.admin.deleteUser(id);
+      throw new Error("Não foi possível concluir o cadastro. / Could not finish registration.");
+    }
+    return { ok: true };
+  });
+
+export const setManagedUsername = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ userId: z.string().uuid(), username: usernameSchema }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: isMaster } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "master" });
+    if (!isMaster) throw new Error("Acesso permitido somente ao usuário mestre.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("profiles").update({ username: data.username }).eq("id", data.userId);
+    if (error) throw new Error("Nome de usuário inválido ou já utilizado. / Invalid or taken username.");
+    return { ok: true };
   });
