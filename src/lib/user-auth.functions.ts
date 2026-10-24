@@ -34,10 +34,17 @@ export const changeOwnPassword = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: profile } = await context.supabase.from("profiles").select("is_active").eq("id", context.userId).single();
     if (!profile?.is_active) throw new Error("Acesso desabilitado. / Access disabled.");
-    const { error } = await context.supabase.auth.updateUser({ password: data.password, current_password: data.currentPassword });
+    const { createClient } = await import("@supabase/supabase-js");
+    const client = createClient(process.env['SUPABASE_URL']!, process.env['SUPABASE_PUBLISHABLE_KEY']!, { auth: { persistSession: false, autoRefreshToken: false } });
+    const email = context.claims.email;
+    if (!email) throw new Error("Conta sem e-mail. / Missing account email.");
+    const { data: verified, error: verifyError } = await client.auth.signInWithPassword({ email, password: data.currentPassword });
+    if (verifyError || verified.user?.id !== context.userId) throw new Error("Confira a senha atual. / Check your current password.");
+    const { error } = await client.auth.updateUser({ password: data.password, current_password: data.currentPassword });
     if (error) throw new Error("Confira a senha atual e tente novamente. / Check your current password and try again.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error: saveError } = await supabaseAdmin.from("profiles").update({ initial_password_pending: false }).eq("id", context.userId);
     if (saveError) throw new Error("Senha alterada; atualize a página. / Password changed; refresh the page.");
+    await client.auth.signOut({ scope: "local" });
     return { ok: true };
   });
