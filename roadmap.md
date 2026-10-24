@@ -15,7 +15,7 @@
 - [x] Corrigir salvamento do agendamento, unificar função e continuar cadastro com CPF não encontrado
 - [x] Adicionar importação em lote de empresas e funcionários para o mestre, com modelos e validação
 - [x] Acesso por usuário e senha, criação pelo mestre e troca da senha inicial
+- [x] Permitir edição completa e exclusão segura de usuários pelo mestre
 
 ## Em andamento
-- [ ] Permitir edição completa e exclusão segura de usuários pelo mestre
 - [ ] Implementar agenda controlada, exames por função/funcionário, avisos e guia PDF
