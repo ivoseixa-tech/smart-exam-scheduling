@@ -14,4 +14,5 @@
 - [x] Atualizar o cadastro pela última alteração salva em funcionário ou agendamento, preservando históricos
 
 ## Em andamento
+- [ ] Corrigir salvamento do agendamento, unificar função e continuar cadastro com CPF não encontrado
 - [ ] Implementar agenda controlada, exames por função/funcionário, avisos e guia PDF
