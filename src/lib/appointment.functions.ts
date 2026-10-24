@@ -93,7 +93,12 @@ export const createAppointmentFromClinic = createServerFn({ method: "POST" })
         .eq("id", data.employeeId)
         .maybeSingle();
       if (employeeError) throw employeeError;
-      if (!employee?.is_active || employee.company_id !== data.companyId) throw new Error("Funcionário indisponível.");
+      if (!employee || employee.company_id !== data.companyId) throw new Error("Funcionário indisponível para esta empresa.");
+      if (!employee.is_active) {
+        // A new appointment for an inactive worker of the same company reactivates the registry entry.
+        const { error: reactivateError } = await supabaseAdmin.from("employees").update({ is_active: true }).eq("id", employee.id);
+        if (reactivateError) throw reactivateError;
+      }
       if (data.employeeSnapshot && data.employeeSnapshot.cpf !== employee.cpf) throw new Error("O CPF deve corresponder ao funcionário selecionado.");
       const functionId = data.employeeSnapshot?.occupational_function_id ?? employee.occupational_function_id;
       if (functionId) {
