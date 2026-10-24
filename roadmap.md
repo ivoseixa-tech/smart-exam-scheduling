@@ -12,7 +12,7 @@
 - [x] Exigir função no novo agendamento
 - [x] Permitir ajustes dos dados no novo agendamento, gerar código único e consultar histórico por nome/CPF
 - [x] Atualizar o cadastro pela última alteração salva em funcionário ou agendamento, preservando históricos
+- [x] Corrigir salvamento do agendamento, unificar função e continuar cadastro com CPF não encontrado
 
 ## Em andamento
-- [ ] Corrigir salvamento do agendamento, unificar função e continuar cadastro com CPF não encontrado
 - [ ] Implementar agenda controlada, exames por função/funcionário, avisos e guia PDF
