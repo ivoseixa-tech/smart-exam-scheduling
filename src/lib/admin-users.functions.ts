@@ -73,6 +73,8 @@ export const setManagedUserApproval = createServerFn({ method: "POST" })
 export const createCompanyAgendaUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => z.object({
+    username: usernameSchema,
+    email: z.string().trim().email().max(255),
     companyId: z.string().uuid(),
     fullName: z.string().trim().min(2).max(120),
     password: z.string().min(8).max(72),
@@ -86,8 +88,8 @@ export const createCompanyAgendaUser = createServerFn({ method: "POST" })
     if (companyError || !company) throw new Error("Empresa não encontrada.");
     if (company.status !== "approved") throw new Error("A empresa precisa estar aprovada para receber acesso à agenda.");
 
-    const loginCode = `AGENDA-${crypto.randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
-    const authEmail = `${loginCode.toLowerCase()}@login.medagenda.local`;
+    const loginCode = data.username;
+    const authEmail = data.email;
     const { data: created, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: authEmail,
       password: data.password,
@@ -97,13 +99,13 @@ export const createCompanyAgendaUser = createServerFn({ method: "POST" })
     if (authError || !created.user) throw new Error(authError?.message ?? "Não foi possível criar o usuário da empresa.");
 
     try {
-      const { error: profileError } = await supabaseAdmin.from("profiles").insert({
+      const { error: profileError } = await supabaseAdmin.from("profiles").upsert({
         id: created.user.id, company_id: data.companyId, full_name: data.fullName,
         preferred_language: "pt", is_active: true,
         username: loginCode.toLowerCase(), initial_password_pending: true,
       });
       if (profileError) throw profileError;
-      const { error: roleError2 } = await supabaseAdmin.from("user_roles").insert({ user_id: created.user.id, role: "company_user" });
+      const { error: roleError2 } = await supabaseAdmin.from("user_roles").upsert({ user_id: created.user.id, role: "company_user" }, {onConflict: "user_id,role"});
       if (roleError2) throw roleError2;
     } catch (error) {
       await supabaseAdmin.auth.admin.deleteUser(created.user.id);
