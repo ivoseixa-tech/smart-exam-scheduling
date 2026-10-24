@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Check, KeyRound, Search, ShieldOff, UserRound, Plus, Pencil } from "lucide-react";
-import { listManagedUsers, resetManagedUserPassword, setManagedUserApproval, createManagedUser, setManagedUsername } from "@/lib/admin-users.functions";
+import { Check, KeyRound, Search, ShieldOff, UserRound, Plus, Pencil, Trash2 } from "lucide-react";
+import { listManagedUsers, resetManagedUserPassword, setManagedUserApproval, createManagedUser, updateManagedUser, deleteManagedUser } from "@/lib/admin-users.functions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,9 @@ export function UserManagement({ language, companies }: { language: "pt" | "en";
   const resetPassword = useServerFn(resetManagedUserPassword);
   const setApproval = useServerFn(setManagedUserApproval);
   const createUser = useServerFn(createManagedUser);
-  const changeUsername = useServerFn(setManagedUsername);
+  const updateUser = useServerFn(updateManagedUser);
+  const deleteUser = useServerFn(deleteManagedUser);
+  const [deleting, setDeleting] = useState<ManagedUser | null>(null);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<ManagedUser | null>(null);
   const [busy, setBusy] = useState(false);
@@ -60,9 +62,21 @@ export function UserManagement({ language, companies }: { language: "pt" | "en";
   async function saveAccount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const form = new FormData(event.currentTarget); setBusy(true); setMessage("");
     try {
-      if (editing) await changeUsername({ data: { userId: editing.id, username: String(form.get("username")) } });
+      if (editing) await updateUser({ data: { userId: editing.id, username: String(form.get("username")), email: String(form.get("email")), fullName: String(form.get("fullName")), companyId: editing.role === "master" ? editing.companyId : String(form.get("companyId")) } });
       else await createUser({ data: { username: String(form.get("username")), email: String(form.get("email")), fullName: String(form.get("fullName")), companyId: String(form.get("companyId")), password: String(form.get("password")), active: form.get("active") === "on" } });
       setCreating(false); setEditing(null); setUsers(await listUsers()); setMessage(language === "pt" ? "Usuário salvo com sucesso." : "User saved successfully.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Erro / Error"); }
+    finally { setBusy(false); }
+  }
+
+  async function confirmDelete() {
+    if (!deleting || busy) return;
+    setBusy(true); setMessage("");
+    try {
+      await deleteUser({ data: { userId: deleting.id } });
+      setUsers((current) => current.filter((user) => user.id !== deleting.id));
+      setDeleting(null);
+      setMessage(language === "pt" ? "Usuário excluído. Os agendamentos e históricos foram preservados." : "User deleted. Appointments and history were preserved.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Erro / Error"); }
     finally { setBusy(false); }
   }
@@ -77,6 +91,14 @@ export function UserManagement({ language, companies }: { language: "pt" | "en";
       {!loading && !filtered.length && <p className="p-8 text-center text-sm text-muted-foreground">{text.empty}</p>}
     </div>
     <Dialog open={Boolean(selected)} onOpenChange={(open) => !open && setSelected(null)}><DialogContent><DialogHeader><DialogTitle>{text.dialog}</DialogTitle><DialogDescription>{selected?.fullName} · {text.description}</DialogDescription></DialogHeader><form onSubmit={submit} className="space-y-5"><div className="space-y-2"><Label htmlFor="managed-password">{text.password}</Label><Input id="managed-password" name="password" type="password" minLength={8} maxLength={72} required autoComplete="new-password"/></div><DialogFooter><Button type="button" variant="outline" onClick={() => setSelected(null)}>{text.cancel}</Button><Button type="submit">{text.save}</Button></DialogFooter></form></DialogContent></Dialog>
-    <Dialog open={creating || Boolean(editing)} onOpenChange={(open) => { if (!open && !busy) {setCreating(false);setEditing(null);} }}><DialogContent><DialogHeader><DialogTitle>{editing ? language === "pt" ? "Editar nome de usuário" : "Edit username" : language === "pt" ? "Novo usuário" : "New user"}</DialogTitle></DialogHeader><form onSubmit={saveAccount} className="space-y-4"><div className="space-y-2"><Label htmlFor="account-username">{language === "pt" ? "Nome de usuário" : "Username"}</Label><Input id="account-username" name="username" defaultValue={editing?.username} required pattern="[a-zA-Z0-9][a-zA-Z0-9._-]{2,63}" autoComplete="off"/></div>{!editing && <>{[{name:"fullName",label:language === "pt" ? "Nome completo" : "Full name",type:"text"},{name:"email",label:"E-mail",type:"email"},{name:"password",label:language === "pt" ? "Senha inicial" : "Initial password",type:"password"}].map(field => <div key={field.name} className="space-y-2"><Label htmlFor={`account-${field.name}`}>{field.label}</Label><Input id={`account-${field.name}`} name={field.name} type={field.type} minLength={field.type === "password" ? 8 : undefined} maxLength={field.type === "password" ? 72 : 255} required autoComplete={field.type === "password" ? "new-password" : "off"}/></div>)}<div className="space-y-2"><Label htmlFor="account-company">{text.company}</Label><select id="account-company" name="companyId" required className="h-10 w-full rounded-md border bg-background px-3 text-sm"><option value="">{language === "pt" ? "Selecionar empresa" : "Select company"}</option>{companies.filter(c => c.status === "approved").map(c => <option key={c.id} value={c.id}>{c.trade_name || c.legal_name}</option>)}</select></div><label className="flex items-center gap-2 text-sm"><input name="active" type="checkbox" defaultChecked/>{language === "pt" ? "Acesso habilitado" : "Access enabled"}</label></>}{message && <p role="alert" className="text-sm text-destructive">{message}</p>}<DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={() => {setCreating(false);setEditing(null);}}>{text.cancel}</Button><Button disabled={busy}>{language === "pt" ? "Salvar usuário" : "Save user"}</Button></DialogFooter></form></DialogContent></Dialog>
+    <Dialog open={creating || Boolean(editing)} onOpenChange={(open) => { if (!open && !busy) {setCreating(false);setEditing(null);} }}><DialogContent><DialogHeader><DialogTitle>{editing ? language === "pt" ? "Editar usuário" : "Edit user" : language === "pt" ? "Novo usuário" : "New user"}</DialogTitle></DialogHeader><form onSubmit={saveAccount} className="space-y-4">
+      <div className="space-y-2"><Label htmlFor="account-username">{language === "pt" ? "Nome de usuário" : "Username"}</Label><Input id="account-username" name="username" defaultValue={editing?.username} required pattern="[a-zA-Z0-9][a-zA-Z0-9._-]{2,63}" autoComplete="off"/></div>
+      <div className="space-y-2"><Label htmlFor="account-fullName">{language === "pt" ? "Nome completo" : "Full name"}</Label><Input id="account-fullName" name="fullName" defaultValue={editing?.fullName} minLength={2} maxLength={120} required/></div>
+      <div className="space-y-2"><Label htmlFor="account-email">E-mail</Label><Input id="account-email" name="email" type="email" defaultValue={editing?.email} maxLength={255} required/></div>
+      {!editing && <div className="space-y-2"><Label htmlFor="account-password">{language === "pt" ? "Senha inicial" : "Initial password"}</Label><Input id="account-password" name="password" type="password" minLength={8} maxLength={72} required autoComplete="new-password"/></div>}
+      <div className="space-y-2"><Label htmlFor="account-company">{text.company}</Label><select id="account-company" name="companyId" defaultValue={editing?.companyId ?? ""} required={editing?.role !== "master"} disabled={editing?.role === "master"} className="h-10 w-full rounded-md border bg-background px-3 text-sm"><option value="">{editing?.role === "master" ? "Master" : language === "pt" ? "Selecionar empresa" : "Select company"}</option>{companies.filter(c => c.status === "approved" || c.id === editing?.companyId).map(c => <option key={c.id} value={c.id}>{c.trade_name || c.legal_name}</option>)}</select></div>
+      {!editing && <label className="flex items-center gap-2 text-sm"><input name="active" type="checkbox" defaultChecked/>{language === "pt" ? "Acesso habilitado" : "Access enabled"}</label>}
+      {message && <p role="alert" className="text-sm text-destructive">{message}</p>}<DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={() => {setCreating(false);setEditing(null);}}>{text.cancel}</Button><Button disabled={busy}>{language === "pt" ? "Salvar usuário" : "Save user"}</Button></DialogFooter></form></DialogContent></Dialog>
+    <Dialog open={Boolean(deleting)} onOpenChange={(open) => {if (!open && !busy) setDeleting(null);}}><DialogContent><DialogHeader><DialogTitle>{language === "pt" ? "Excluir usuário?" : "Delete user?"}</DialogTitle><DialogDescription>{deleting?.fullName} · {deleting?.username}<br/>{language === "pt" ? "O acesso será removido permanentemente. Os agendamentos e históricos serão preservados." : "Access will be permanently removed. Appointments and history will be preserved."}</DialogDescription></DialogHeader>{message && <p role="alert" className="text-sm text-destructive">{message}</p>}<DialogFooter><Button variant="outline" disabled={busy} onClick={() => setDeleting(null)}>{text.cancel}</Button><Button variant="destructive" disabled={busy} onClick={() => void confirmDelete()}><Trash2/>{language === "pt" ? "Excluir usuário" : "Delete user"}</Button></DialogFooter></DialogContent></Dialog>
   </>;
 }
